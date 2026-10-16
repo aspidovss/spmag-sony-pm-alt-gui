@@ -1,0 +1,9 @@
+NOTIFY * HTTP/1.1
+HOST: 239.255.255.250:1900
+CACHE-CONTROL: max-age=1800
+LOCATION: http://192.168.0.100:1900/DeviceDescription.xml
+NT: urn:microsoft-com:service:MtpNullService:1
+NTS: ssdp:alive
+SERVER: FedoraCore/2 UPnP/1.0 MINT-X/1.8.1
+USN: uuid:00000000-0001-0010-8000-000000000000::urn:microsoft-com:service:MtpNullService:1
+

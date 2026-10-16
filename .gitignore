@@ -1,0 +1,6 @@
+/dist/
+/build/
+*.syso
+*.exe
+/go.local.mod
+/go.local.sum

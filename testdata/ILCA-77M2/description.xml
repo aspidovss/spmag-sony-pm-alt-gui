@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<root xmlns="urn:schemas-upnp-org:device-1-0" xmlns:dlna="urn:schemas-dlna-org:device-1-0" xmlns:av="urn:schemas-sony-com:av">
+<specVersion>
+<major>1</major>
+<minor>0</minor>
+</specVersion>
+<device>
+<deviceType>urn:microsoft-com:device:mtp:1</deviceType>
+<pnpx:X_compatibleId xmlns:pnpx="http://schemas.microsoft.com/windows/pnpx/2005/11">urn:microsoft-com:device:mtp:1 MS_SUBCOMP_02</pnpx:X_compatibleId>
+<friendlyName>ILCA-77M2</friendlyName>
+<manufacturer>Sony Corporation</manufacturer>
+<manufacturerURL>http://www.sony.com</manufacturerURL>
+<modelDescription>Media Server</modelDescription>
+<modelName>ILCA-77M2</modelName>
+<modelNumber>MODEL NUMBER</modelNumber>
+<modelURL>http://www.sony.net/</modelURL>
+<serialNumber>SERIAL NUMBER</serialNumber>
+<UDN>uuid:00000000-0001-0010-8000-000000000000</UDN>
+<dlna:X_DLNADOC>DMS-1.50</dlna:X_DLNADOC>
+<serviceList>
+<service>
+<serviceType>urn:microsoft-com:service:MtpNullService:1</serviceType>
+<serviceId>urn:microsoft-com:serviceId:MtpNullServiceId</serviceId>
+<SCPDURL>/ServiceDescription.xml</SCPDURL>
+<controlURL>/MtpNullServiceControl</controlURL>
+<eventSubURL></eventSubURL>
+</service>
+</serviceList>
+<iconList>
+<icon>
+<mimetype>image/jpeg</mimetype>
+<width>48</width>
+<height>48</height>
+<depth>24</depth>
+<url>/icon/small.jpg</url>
+</icon>
+</iconList>
+</device>
+</root>
