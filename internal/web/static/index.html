@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPMAG Wifi Photo Receiver</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>SPMAG Wifi Photo Receiver</h1>
+  <nav role="tablist">
+    <button class="tab active" data-tab="transfer" data-i18n="tab.transfer">Transfer</button>
+    <button class="tab" data-tab="settings" data-i18n="tab.settings">Settings</button>
+    <button class="tab" data-tab="log" data-i18n="tab.log">Log</button>
+  </nav>
+</header>
+<div id="banner" class="banner" hidden></div>
+
+<main>
+<section id="tab-transfer" class="panel">
+  <div id="title" class="title">…</div>
+  <div id="detail" class="detail"></div>
+  <div class="progress"><div class="bar"><div id="bar" class="fill"></div></div><div id="progText" class="progtext"></div></div>
+  <div class="toolbar">
+    <button id="btnMissing" data-i18n="btn.downloadMissing">Download missing</button>
+    <button id="btnSelected" data-i18n="btn.downloadSelected">Download selected</button>
+    <button id="btnStop" data-i18n="btn.stop">Stop</button>
+    <button id="btnRescan" data-i18n="btn.recheck">Re-check camera</button>
+    <button id="btnFinish" data-i18n="btn.finish">Finish &amp;&amp; disconnect</button>
+    <button id="btnPause" data-i18n="tray.pause">Pause automatic import</button>
+    <span class="grow"></span>
+    <input id="ip" type="text" inputmode="decimal" size="15" placeholder="192.168.0.10" aria-label="IP">
+    <button id="btnIP" data-i18n="btn.connectIP">Connect to IP…</button>
+  </div>
+  <div class="toolbar">
+    <label><span data-i18n="lbl.show">Show:</span>
+      <select id="filter">
+        <option value="0" data-i18n="filter.all">All files</option>
+        <option value="1" data-i18n="filter.missing">Missing</option>
+        <option value="2" data-i18n="filter.received">Received</option>
+        <option value="3" data-i18n="filter.failed">Failed</option>
+        <option value="4" data-i18n="filter.excluded">Excluded by filter</option>
+      </select>
+    </label>
+    <button id="btnForget" data-i18n="menu.markNotReceived">Mark as not received</button>
+    <span class="grow"></span>
+    <span id="counts" class="counts"></span>
+  </div>
+  <div class="tablewrap">
+    <table id="files">
+      <thead><tr>
+        <th class="chk"><input type="checkbox" id="selAll" aria-label="Select all" data-i18n-aria="web.selectAll"></th>
+        <th data-sort="name" data-i18n="col.file">File</th>
+        <th data-sort="kind" data-i18n="col.type">Type</th>
+        <th data-sort="taken" data-i18n="col.taken">Taken</th>
+        <th data-sort="size" class="num" data-i18n="col.size">Size</th>
+        <th data-sort="status" data-i18n="col.status">Status</th>
+        <th data-sort="folder" data-i18n="col.folder">Camera folder</th>
+        <th data-sort="path" data-i18n="col.saved">Saved to / note</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p id="empty" class="empty" data-i18n="web.noFiles" hidden>No files to show.</p>
+  </div>
+</section>
+
+<section id="tab-settings" class="panel" hidden>
+  <form id="form" autocomplete="off">
+    <fieldset>
+      <legend data-i18n="set.where">Where to save</legend>
+      <label class="row"><span data-i18n="set.folder">Folder:</span><input id="destDir" type="text" required></label>
+      <label class="row"><span data-i18n="set.subfolders">Subfolders:</span><input id="pattern" type="text" list="patterns"></label>
+      <datalist id="patterns"></datalist>
+      <p class="hint" data-i18n="set.patternHelp"></p>
+    </fieldset>
+    <fieldset>
+      <legend data-i18n="set.types">File types to download automatically</legend>
+      <label class="check"><input id="jpeg" type="checkbox"><span data-i18n="set.jpeg">JPEG / HEIF</span></label>
+      <label class="check"><input id="raw" type="checkbox"><span data-i18n="set.raw">RAW (ARW)</span></label>
+      <label class="check"><input id="video" type="checkbox"><span data-i18n="set.video">Video (MP4, MTS)</span></label>
+      <label class="check"><input id="other" type="checkbox"><span data-i18n="set.other">Other files</span></label>
+    </fieldset>
+    <fieldset>
+      <legend data-i18n="set.behaviour">Behaviour</legend>
+      <label class="check"><input id="auto" type="checkbox"><span data-i18n="set.auto"></span></label>
+      <label class="check"><input id="finish" type="checkbox"><span data-i18n="set.finish"></span></label>
+      <label class="check"><input id="match" type="checkbox"><span data-i18n="set.match"></span></label>
+    </fieldset>
+    <fieldset>
+      <legend data-i18n="set.pairing">Camera pairing</legend>
+      <label class="row"><span data-i18n="set.guid">This PC's ID (GUID):</span>
+        <span class="inline"><input id="guid" type="text" readonly><button type="button" id="btnNewID" data-i18n="set.newID">New ID</button></span></label>
+      <label class="row"><span data-i18n="set.hostName">Name shown on camera:</span><input id="hostName" type="text" maxlength="40"></label>
+      <label class="check"><input id="pmh" type="checkbox"><span data-i18n="set.pmh"></span></label>
+      <div id="pairBox"><button type="button" id="btnPair" data-i18n="set.pairUSB">Pair camera via USB…</button> <span id="drives" class="hint"></span></div>
+      <p class="hint pre" data-i18n="set.pairHelp"></p>
+    </fieldset>
+    <fieldset>
+      <legend data-i18n="set.language">Language</legend>
+      <label class="row"><span data-i18n="set.languageLbl">Interface language:</span><select id="language"></select></label>
+    </fieldset>
+    <div class="toolbar"><button type="submit" class="primary" data-i18n="set.save">Save settings</button><span id="saveMsg" class="msg" role="status"></span></div>
+  </form>
+</section>
+
+<section id="tab-log" class="panel" hidden>
+  <pre id="log" class="log"></pre>
+</section>
+</main>
+
+<footer>
+  <span id="ver">SPMAG Wifi Photo Receiver</span> · © 2026 AspidovSS · MIT License ·
+  <a href="https://github.com/aspidovss/spmag-sony-pm-alt-gui" target="_blank" rel="noopener noreferrer">github.com/aspidovss/spmag-sony-pm-alt-gui</a>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>

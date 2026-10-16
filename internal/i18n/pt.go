@@ -136,5 +136,13 @@ func init() {
 		"progress.file":        "Arquivo %d de %d",
 		"progress.speedEta":    " · %s/s · faltam cerca de %s",
 		"progress.measuring":   " · medindo a velocidade…",
+		"web.selectAll":        "Selecionar tudo",
+		"web.noFiles":          "Nenhum arquivo para mostrar.",
+		"web.saved":            "Configurações salvas.",
+		"web.connLost":         "Conexão com o programa perdida. Tentando novamente…",
+		"web.resume":           "Retomar a importação automática",
+		"web.drives":           "Unidades USB encontradas:",
+		"web.pairNA":           "O pareamento via USB não está disponível neste sistema.",
+		"web.logout":           "O login é feito pelo navegador (autenticação HTTP).",
 	})
 }

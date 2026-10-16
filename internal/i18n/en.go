@@ -138,5 +138,13 @@ func init() {
 		"progress.file":        "File %d of %d",
 		"progress.speedEta":    " · %s/s · about %s left",
 		"progress.measuring":   " · measuring speed…",
+		"web.selectAll":        "Select all",
+		"web.noFiles":          "No files to show.",
+		"web.saved":            "Settings saved.",
+		"web.connLost":         "Connection to the program lost. Retrying…",
+		"web.resume":           "Resume automatic import",
+		"web.drives":           "USB drives found:",
+		"web.pairNA":           "USB pairing is not available on this system.",
+		"web.logout":           "Sign-in is handled by your browser (HTTP authentication).",
 	})
 }

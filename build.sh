@@ -13,12 +13,20 @@ rsrc -manifest build/app.manifest -ico build/app.ico -arch amd64 -o cmd/WifiPhot
 rsrc -ico build/app.ico -arch amd64 -o cmd/wpr/rsrc_windows_amd64.syso
 mkdir -p dist
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=$VERSION" -o dist/SPMAG-WifiPhotoReceiver.exe ./cmd/WifiPhotoReceiver
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o dist/wpr.exe ./cmd/wpr
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o dist/wpr.exe ./cmd/wpr
 cp README.md LICENSE dist/
 # Linux: command-line tool / service (wpr watch)
 for arch in amd64 arm64; do
   mkdir -p "dist/linux-$arch"
-  GOOS=linux GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "dist/linux-$arch/wpr" ./cmd/wpr
+  GOOS=linux GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "dist/linux-$arch/wpr" ./cmd/wpr
   cp README.md LICENSE packaging/linux/spmag-wpr.service "dist/linux-$arch/"
 done
+# Debian packages (skipped if dpkg-deb is missing)
+if command -v dpkg-deb >/dev/null; then
+  for arch in amd64 arm64; do
+    bash packaging/linux/build-deb.sh "$arch" "$VERSION" "dist/linux-$arch/wpr" dist
+  done
+else
+  echo "dpkg-deb not found: skipping .deb packages"
+fi
 ls -la dist dist/linux-*

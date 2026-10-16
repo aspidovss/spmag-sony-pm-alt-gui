@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+    if ! getent passwd spmag-wpr >/dev/null; then
+        adduser --system --group --home /var/lib/spmag-wpr --no-create-home --quiet spmag-wpr || true
+    fi
+    mkdir -p /var/lib/spmag-wpr
+    chown spmag-wpr:spmag-wpr /var/lib/spmag-wpr || true
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+    fi
+    echo "spmag-wpr installed. Edit /etc/default/spmag-wpr, then:"
+    echo "  sudo systemctl enable --now spmag-wpr"
+fi
+exit 0

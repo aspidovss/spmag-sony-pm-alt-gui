@@ -1,0 +1,22 @@
+[Unit]
+Description=SPMAG Wifi Photo Receiver (Sony Send to Computer)
+Documentation=https://github.com/aspidovss/spmag-sony-pm-alt-gui
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=spmag-wpr
+Group=spmag-wpr
+Environment=XDG_CONFIG_HOME=/var/lib/spmag-wpr
+EnvironmentFile=-/etc/default/spmag-wpr
+StateDirectory=spmag-wpr
+ExecStart=/usr/bin/wpr watch $WPR_OPTS
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

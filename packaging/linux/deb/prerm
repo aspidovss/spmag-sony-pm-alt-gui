@@ -1,0 +1,7 @@
+#!/bin/sh
+set -e
+if [ "$1" = remove ] && [ -d /run/systemd/system ]; then
+    systemctl stop spmag-wpr 2>/dev/null || true
+    systemctl disable spmag-wpr 2>/dev/null || true
+fi
+exit 0

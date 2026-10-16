@@ -1,12 +1,22 @@
 # docker compose up -d
+# Put the password into a .env file next to this one:
+#   SPMAG_WEB_PASSWORD=choose-a-long-password
+# then open http://<this host>:8080
 services:
   spmag-wpr:
     build: .
     container_name: spmag-wpr
     network_mode: host          # required for SSDP camera discovery
     restart: unless-stopped
+    environment:
+      SPMAG_WEB: ":8080"        # browser interface; remove both lines for headless mode
+      SPMAG_WEB_PASSWORD: ${SPMAG_WEB_PASSWORD:?set SPMAG_WEB_PASSWORD in .env}
     volumes:
       - /srv/photos/camera:/photos
       - ./config:/config        # settings.json (pairing ID) and received.json
+    # USB pairing from the web page: pass the camera's SCSI generic device
+    # (camera in Mass Storage mode; find it with "wpr usb" on the host)
+    # devices:
+    #   - /dev/sg1:/dev/sg1
     # extra options are appended to "wpr watch -dest /photos", e.g.:
-    # command: ["-types", "jpeg,raw", "-guid", "00:00:00:00:00:00:00:00:ff:ff:..."]
+    # command: ["-types", "jpeg,raw", "-lang", "en"]
