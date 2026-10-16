@@ -8,25 +8,35 @@ env:
   GOFLAGS: -mod=mod
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.22"
       - name: Test
         run: go test ./internal/...
       - name: Build
-        run: VERSION="${GITHUB_REF_NAME#v}" ./build.sh
+        run: VERSION="${GITHUB_REF_NAME#v}" bash ./build.sh
       - name: Package
         run: |
-          name="SPMAG-WifiPhotoReceiver-${GITHUB_REF_NAME}-windows-amd64"
-          mkdir "$name" && cp dist/* "$name"/
-          zip -r "$name.zip" "$name"
-          sha256sum "$name.zip" > "$name.zip.sha256"
-      - uses: softprops/action-gh-release@v2
+          v="${GITHUB_REF_NAME}"
+          win="SPMAG-WifiPhotoReceiver-$v-windows-amd64"
+          mkdir "$win" && cp dist/*.exe dist/README.md dist/LICENSE "$win"/
+          zip -r "$win.zip" "$win"
+          for arch in amd64 arm64; do
+            lin="SPMAG-wpr-$v-linux-$arch"
+            cp -r "dist/linux-$arch" "$lin"
+            tar -czf "$lin.tar.gz" "$lin"
+          done
+          sha256sum SPMAG-*.zip SPMAG-*.tar.gz > SHA256SUMS.txt
+          # release notes: only this version's section of the changelog
+          awk -v v="${v#v}" '/^## /{p = ($2 == v || $2 == "v" v)} p' CHANGELOG.md > release-notes.md
+          test -s release-notes.md || cp CHANGELOG.md release-notes.md
+      - uses: softprops/action-gh-release@v3
         with:
           files: |
-            SPMAG-WifiPhotoReceiver-*.zip
-            SPMAG-WifiPhotoReceiver-*.zip.sha256
-          body_path: CHANGELOG.md
+            SPMAG-*.zip
+            SPMAG-*.tar.gz
+            SHA256SUMS.txt
+          body_path: release-notes.md
