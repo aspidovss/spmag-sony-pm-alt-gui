@@ -1,0 +1,34 @@
+# systemd unit for SPMAG Wifi Photo Receiver (wpr watch).
+#
+#   sudo install -m 755 wpr /usr/local/bin/wpr
+#   sudo install -m 644 spmag-wpr.service /etc/systemd/system/
+#   sudo systemctl edit spmag-wpr      # optional: change User= / -dest
+#   sudo systemctl enable --now spmag-wpr
+#   journalctl -u spmag-wpr -f
+#
+# The camera must be paired with the ID this service uses: copy the "guid"
+# from your Windows settings.json into -guid, or pair once over USB.
+[Unit]
+Description=SPMAG Wifi Photo Receiver (Sony Send to Computer)
+Documentation=https://github.com/aspidovss/spmag-sony-pm-alt-gui
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=photos
+Group=photos
+Environment=XDG_CONFIG_HOME=/var/lib/spmag-wpr
+StateDirectory=spmag-wpr
+ExecStart=/usr/local/bin/wpr watch -dest /srv/photos/camera
+Restart=on-failure
+RestartSec=10
+# hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/srv/photos
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

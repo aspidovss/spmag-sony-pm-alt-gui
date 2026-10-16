@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/app"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/config"
+	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/i18n"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/icon"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/pairing"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/store"
@@ -48,20 +50,33 @@ func main() {
 			os.Exit(helperFirewall(args[1:]))
 		}
 	}
-	if !winutil.SingleInstance("WifiPhotoReceiver-7f3c") {
+	cfg, cfgErr := config.Load()
+	i18n.Set(cfg.Language)
+	// After a language change the old process is still shutting down.
+	attempts := 1
+	if contains(args, "--restarted") {
+		attempts = 50
+	}
+	got := false
+	for i := 0; i < attempts && !got; i++ {
+		if got = winutil.SingleInstance("WifiPhotoReceiver-7f3c"); !got {
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+	if !got {
 		if !winutil.ActivateWindow(config.AppName) {
-			walk.MsgBox(nil, config.AppName, config.AppName+" is already running (see the tray icon).", walk.MsgBoxIconInformation)
+			walk.MsgBox(nil, config.AppName, i18n.T("app.alreadyRunning", config.AppName), walk.MsgBoxIconInformation)
 		}
 		return
 	}
-	cfg, err := config.Load()
-	if err != nil {
-		walk.MsgBox(nil, config.AppName, "Settings could not be read, defaults are used:\n"+err.Error(), walk.MsgBoxIconWarning)
+	if cfgErr != nil {
+		walk.MsgBox(nil, config.AppName, i18n.T("app.settingsReadErr", cfgErr.Error()), walk.MsgBoxIconWarning)
 	}
+	var err error
 	startHidden := cfg.StartMinimized && contains(args, "--tray")
 	db, err := store.Open(filepath.Join(config.Dir(), "received.json"))
 	if err != nil {
-		walk.MsgBox(nil, config.AppName, "Cannot open the transfer database:\n"+err.Error(), walk.MsgBoxIconError)
+		walk.MsgBox(nil, config.AppName, i18n.T("app.dbErr", err.Error()), walk.MsgBoxIconError)
 		return
 	}
 	ui := &gui{cfg: cfg, db: db}
@@ -105,7 +120,8 @@ type gui struct {
 	cbAuto, cbFinish, cbMatch, cbStartWin  *walk.CheckBox
 	cbStartMin, cbNotify, cbPMH            *walk.CheckBox
 	// log page
-	logTE *walk.TextEdit
+	logTE  *walk.TextEdit
+	langCB *walk.ComboBox
 
 	pauseAction *walk.Action
 	exiting     bool
@@ -149,7 +165,7 @@ func (g *gui) run(startHidden bool) {
 		},
 	}
 	if err := mainWin.Create(); err != nil {
-		walk.MsgBox(nil, config.AppName, "Cannot create window: "+err.Error(), walk.MsgBoxIconError)
+		walk.MsgBox(nil, config.AppName, i18n.T("app.windowErr", err.Error()), walk.MsgBoxIconError)
 		return
 	}
 	g.loadSettingsIntoForm()
@@ -165,7 +181,7 @@ func (g *gui) run(startHidden bool) {
 		g.mw.Hide()
 		if !g.hiddenOnce && g.ni != nil {
 			g.hiddenOnce = true
-			_ = g.ni.ShowInfo(config.AppName, "Still running in the tray. It will receive photos when the camera starts \"Send to Computer\".")
+			_ = g.ni.ShowInfo(config.AppName, i18n.T("tray.hidden"))
 		}
 	})
 
@@ -201,10 +217,10 @@ func (g *gui) run(startHidden bool) {
 
 func (g *gui) transferPage() TabPage {
 	return TabPage{
-		Title:  "Transfer",
+		Title:  i18n.T("tab.transfer"),
 		Layout: VBox{},
 		Children: []Widget{
-			Label{AssignTo: &g.statusLbl, Font: Font{PointSize: 11, Bold: true}, Text: "Starting…"},
+			Label{AssignTo: &g.statusLbl, Font: Font{PointSize: 11, Bold: true}, Text: i18n.T("status.starting")},
 			TextLabel{AssignTo: &g.detailLbl, Text: " "},
 			Composite{
 				Layout: HBox{MarginsZero: true},
@@ -216,23 +232,23 @@ func (g *gui) transferPage() TabPage {
 			Composite{
 				Layout: HBox{MarginsZero: true},
 				Children: []Widget{
-					PushButton{AssignTo: &g.btnMissing, Text: "Download missing", OnClicked: func() { g.ctl.DownloadMissing() }},
-					PushButton{AssignTo: &g.btnSelected, Text: "Download selected", OnClicked: g.downloadSelected},
-					PushButton{AssignTo: &g.btnCancel, Text: "Stop", OnClicked: func() { g.ctl.CancelDownload() }},
-					PushButton{AssignTo: &g.btnRescan, Text: "Re-check camera", OnClicked: func() { g.ctl.Rescan() }},
-					PushButton{AssignTo: &g.btnFinish, Text: "Finish && disconnect", OnClicked: func() { g.ctl.Disconnect(true) }},
+					PushButton{AssignTo: &g.btnMissing, Text: i18n.T("btn.downloadMissing"), OnClicked: func() { g.ctl.DownloadMissing() }},
+					PushButton{AssignTo: &g.btnSelected, Text: i18n.T("btn.downloadSelected"), OnClicked: g.downloadSelected},
+					PushButton{AssignTo: &g.btnCancel, Text: i18n.T("btn.stop"), OnClicked: func() { g.ctl.CancelDownload() }},
+					PushButton{AssignTo: &g.btnRescan, Text: i18n.T("btn.recheck"), OnClicked: func() { g.ctl.Rescan() }},
+					PushButton{AssignTo: &g.btnFinish, Text: i18n.T("btn.finish"), OnClicked: func() { g.ctl.Disconnect(true) }},
 					HSpacer{},
-					PushButton{Text: "Connect to IP…", OnClicked: g.connectIP},
-					PushButton{Text: "Open folder", OnClicked: func() { winutil.OpenFolder(g.ctl.Settings().DestDir) }},
+					PushButton{Text: i18n.T("btn.connectIP"), OnClicked: g.connectIP},
+					PushButton{Text: i18n.T("btn.openFolder"), OnClicked: func() { winutil.OpenFolder(g.ctl.Settings().DestDir) }},
 				},
 			},
 			Composite{
 				Layout: HBox{MarginsZero: true},
 				Children: []Widget{
-					Label{Text: "Show:"},
+					Label{Text: i18n.T("lbl.show")},
 					ComboBox{
 						AssignTo:     &g.filterCB,
-						Model:        filterNames,
+						Model:        filterNames(),
 						CurrentIndex: 0,
 						OnCurrentIndexChanged: func() {
 							g.model.setFilter(g.filterCB.CurrentIndex())
@@ -250,13 +266,13 @@ func (g *gui) transferPage() TabPage {
 				ColumnsOrderable:    true,
 				LastColumnStretched: true,
 				Columns: []TableViewColumn{
-					{Title: "File", Width: 120},
-					{Title: "Type", Width: 55},
-					{Title: "Taken", Width: 135},
-					{Title: "Size", Width: 75, Alignment: AlignFar},
-					{Title: "Status", Width: 130},
-					{Title: "Camera folder", Width: 95},
-					{Title: "Saved to / note", Width: 300},
+					{Title: i18n.T("col.file"), Width: 120},
+					{Title: i18n.T("col.type"), Width: 55},
+					{Title: i18n.T("col.taken"), Width: 135},
+					{Title: i18n.T("col.size"), Width: 75, Alignment: AlignFar},
+					{Title: i18n.T("col.status"), Width: 130},
+					{Title: i18n.T("col.folder"), Width: 95},
+					{Title: i18n.T("col.saved"), Width: 300},
 				},
 				StyleCell: func(style *walk.CellStyle) {
 					if style.Col() != 4 {
@@ -281,14 +297,14 @@ func (g *gui) transferPage() TabPage {
 					}
 				},
 				ContextMenuItems: []MenuItem{
-					Action{Text: "Download selected", OnTriggered: g.downloadSelected},
-					Action{Text: "Show in folder", OnTriggered: func() {
+					Action{Text: i18n.T("menu.downloadSel"), OnTriggered: g.downloadSelected},
+					Action{Text: i18n.T("menu.showInFolder"), OnTriggered: func() {
 						if i := g.table.CurrentIndex(); i >= 0 && i < len(g.model.rows) && g.model.rows[i].LocalPath != "" {
 							winutil.OpenFolder(g.model.rows[i].LocalPath)
 						}
 					}},
 					Separator{},
-					Action{Text: "Mark as not received", OnTriggered: func() {
+					Action{Text: i18n.T("menu.markNotReceived"), OnTriggered: func() {
 						keys := g.model.keys(g.table.SelectedIndexes())
 						if len(keys) > 0 {
 							g.ctl.Forget(keys)
@@ -302,7 +318,7 @@ func (g *gui) transferPage() TabPage {
 
 func (g *gui) settingsPage() TabPage {
 	return TabPage{
-		Title:  "Settings",
+		Title:  i18n.T("tab.settings"),
 		Layout: VBox{},
 		Children: []Widget{
 			ScrollView{
@@ -310,64 +326,73 @@ func (g *gui) settingsPage() TabPage {
 				Layout:          VBox{},
 				Children: []Widget{
 					GroupBox{
-						Title:  "Where to save",
+						Title:  i18n.T("set.where"),
 						Layout: Grid{Columns: 3},
 						Children: []Widget{
-							Label{Text: "Folder:"},
+							Label{Text: i18n.T("set.folder")},
 							LineEdit{AssignTo: &g.destLE},
-							PushButton{Text: "Browse…", OnClicked: g.browseDest},
-							Label{Text: "Subfolders:"},
+							PushButton{Text: i18n.T("set.browse"), OnClicked: g.browseDest},
+							Label{Text: i18n.T("set.subfolders")},
 							ComboBox{AssignTo: &g.patternCB, Editable: true, Model: patternDisplay(), OnEditingFinished: g.updatePatternExample, OnCurrentIndexChanged: g.updatePatternExample},
-							Label{Text: "{yyyy} {MM} {dd} {camera}; empty = no subfolders"},
-							Label{Text: "Example:"},
+							Label{Text: i18n.T("set.patternHelp")},
+							Label{Text: i18n.T("set.example")},
 							LineEdit{AssignTo: &g.patternExample, ReadOnly: true, ColumnSpan: 2},
 						},
 					},
 					GroupBox{
-						Title:  "File types to download automatically",
+						Title:  i18n.T("set.types"),
 						Layout: HBox{},
 						Children: []Widget{
-							CheckBox{AssignTo: &g.cbJPEG, Text: "JPEG / HEIF"},
-							CheckBox{AssignTo: &g.cbRAW, Text: "RAW (ARW)"},
-							CheckBox{AssignTo: &g.cbVideo, Text: "Video (MP4, MTS)"},
-							CheckBox{AssignTo: &g.cbOther, Text: "Other files"},
+							CheckBox{AssignTo: &g.cbJPEG, Text: i18n.T("set.jpeg")},
+							CheckBox{AssignTo: &g.cbRAW, Text: i18n.T("set.raw")},
+							CheckBox{AssignTo: &g.cbVideo, Text: i18n.T("set.video")},
+							CheckBox{AssignTo: &g.cbOther, Text: i18n.T("set.other")},
 							HSpacer{},
 						},
 					},
 					GroupBox{
-						Title:  "Behaviour",
+						Title:  i18n.T("set.behaviour"),
 						Layout: VBox{},
 						Children: []Widget{
-							CheckBox{AssignTo: &g.cbAuto, Text: "Download missing files automatically when the camera connects"},
-							CheckBox{AssignTo: &g.cbFinish, Text: "After an automatic transfer, tell the camera it is finished (the camera shows the result and turns off)"},
-							CheckBox{AssignTo: &g.cbMatch, Text: "Count files already in the save folder (same name and size) as received"},
-							CheckBox{AssignTo: &g.cbStartWin, Text: "Start with Windows (in the tray)"},
-							CheckBox{AssignTo: &g.cbStartMin, Text: "When started with Windows, stay in the tray"},
-							CheckBox{AssignTo: &g.cbNotify, Text: "Show notifications"},
+							CheckBox{AssignTo: &g.cbAuto, Text: i18n.T("set.auto")},
+							CheckBox{AssignTo: &g.cbFinish, Text: i18n.T("set.finish")},
+							CheckBox{AssignTo: &g.cbMatch, Text: i18n.T("set.match")},
+							CheckBox{AssignTo: &g.cbStartWin, Text: i18n.T("set.startWin")},
+							CheckBox{AssignTo: &g.cbStartMin, Text: i18n.T("set.startMin")},
+							CheckBox{AssignTo: &g.cbNotify, Text: i18n.T("set.notify")},
 						},
 					},
 					GroupBox{
-						Title:  "Camera pairing",
+						Title:  i18n.T("set.pairing"),
 						Layout: Grid{Columns: 3},
 						Children: []Widget{
-							Label{Text: "This PC's ID (GUID):"},
+							Label{Text: i18n.T("set.guid")},
 							LineEdit{AssignTo: &g.guidLE, ReadOnly: true},
-							PushButton{Text: "New ID", OnClicked: g.newGUID},
-							Label{Text: "Name shown on camera:"},
+							PushButton{Text: i18n.T("set.newID"), OnClicked: g.newGUID},
+							Label{Text: i18n.T("set.hostName")},
 							LineEdit{AssignTo: &g.hostLE, CueBanner: hostnameOr("PC")},
 							Label{Text: ""},
-							CheckBox{AssignTo: &g.cbPMH, ColumnSpan: 3, Text: "Also accept an existing PlayMemories Home pairing (ID based on this PC's network adapter)"},
+							CheckBox{AssignTo: &g.cbPMH, ColumnSpan: 3, Text: i18n.T("set.pmh")},
 							Composite{
 								ColumnSpan: 3,
 								Layout:     HBox{MarginsZero: true},
 								Children: []Widget{
-									PushButton{Text: "Pair camera via USB…", OnClicked: g.pairUSB},
-									PushButton{Text: "Allow in Windows Firewall…", OnClicked: g.addFirewall},
+									PushButton{Text: i18n.T("set.pairUSB"), OnClicked: g.pairUSB},
+									PushButton{Text: i18n.T("set.firewall"), OnClicked: g.addFirewall},
 									HSpacer{},
 								},
 							},
-							TextLabel{ColumnSpan: 3, Text: "The camera only sends photos to a PC it is paired with. If the camera was paired with PlayMemories Home on this PC,\n" +
-								"nothing else is needed. Otherwise pair it once over USB (camera USB Connection set to \"Mass Storage\")."},
+							TextLabel{ColumnSpan: 3, Text: i18n.T("set.pairHelp")},
+						},
+					},
+					GroupBox{
+						Title:  i18n.T("set.language"),
+						Layout: HBox{},
+						Children: []Widget{
+							Label{Text: i18n.T("set.languageLbl")},
+							ComboBox{AssignTo: &g.langCB, Model: languageNames(), MinSize: Size{Width: 220}},
+							Label{Text: i18n.T("set.langHint")},
+							HSpacer{},
 						},
 					},
 					Composite{
@@ -379,7 +404,7 @@ func (g *gui) settingsPage() TabPage {
 								OnLinkActivated: func(link *walk.LinkLabelLink) { winutil.OpenURL(link.URL()) },
 							},
 							HSpacer{},
-							PushButton{Text: "Save settings", OnClicked: g.saveSettings},
+							PushButton{Text: i18n.T("set.save"), OnClicked: g.saveSettings},
 						},
 					},
 					VSpacer{},
@@ -391,7 +416,7 @@ func (g *gui) settingsPage() TabPage {
 
 func (g *gui) logPage() TabPage {
 	return TabPage{
-		Title:  "Log",
+		Title:  i18n.T("tab.log"),
 		Layout: VBox{},
 		Children: []Widget{
 			TextEdit{AssignTo: &g.logTE, ReadOnly: true, VScroll: true, Font: Font{Family: "Consolas", PointSize: 9}},
@@ -399,7 +424,7 @@ func (g *gui) logPage() TabPage {
 				Layout: HBox{MarginsZero: true},
 				Children: []Widget{
 					HSpacer{},
-					PushButton{Text: "Open log folder", OnClicked: func() { winutil.OpenFolder(config.Dir()) }},
+					PushButton{Text: i18n.T("log.openFolder"), OnClicked: func() { winutil.OpenFolder(config.Dir()) }},
 				},
 			},
 		},
@@ -410,7 +435,7 @@ func patternDisplay() []string {
 	out := make([]string, len(patterns))
 	for i, p := range patterns {
 		if p == "" {
-			out[i] = "(no subfolders)"
+			out[i] = i18n.T("set.noSubfolders")
 		} else {
 			out[i] = p
 		}
@@ -445,19 +470,19 @@ func (g *gui) setupTray(ic *walk.Icon) {
 	ni.MessageClicked().Attach(g.showWindow)
 
 	open := walk.NewAction()
-	_ = open.SetText("Open")
+	_ = open.SetText(i18n.T("tray.open"))
 	open.Triggered().Attach(g.showWindow)
 	g.pauseAction = walk.NewAction()
-	_ = g.pauseAction.SetText("Pause automatic import")
+	_ = g.pauseAction.SetText(i18n.T("tray.pause"))
 	_ = g.pauseAction.SetCheckable(true)
 	g.pauseAction.Triggered().Attach(func() {
 		g.ctl.SetPaused(g.pauseAction.Checked())
 	})
 	folder := walk.NewAction()
-	_ = folder.SetText("Open save folder")
+	_ = folder.SetText(i18n.T("tray.openSave"))
 	folder.Triggered().Attach(func() { winutil.OpenFolder(g.ctl.Settings().DestDir) })
 	exit := walk.NewAction()
-	_ = exit.SetText("Exit")
+	_ = exit.SetText(i18n.T("tray.exit"))
 	exit.Triggered().Attach(func() {
 		g.exiting = true
 		g.mw.Close()
@@ -501,9 +526,9 @@ func (g *gui) refresh() {
 		return
 	}
 	s := g.ctl.Snapshot()
-	title := s.State.String()
+	title := s.State.Text()
 	if s.Paused && s.State == app.StateWaiting {
-		title = "Paused — automatic import is off"
+		title = i18n.T("status.paused")
 	}
 	if s.Camera != "" {
 		title += " — " + s.Camera
@@ -511,9 +536,9 @@ func (g *gui) refresh() {
 	_ = g.statusLbl.SetText(title)
 	detail := s.Message
 	if s.IP != "" && s.State != app.StateWaiting {
-		detail += "\nCamera address: " + s.IP
+		detail += "\n" + i18n.T("detail.address", s.IP)
 		if s.GUIDSource != "" {
-			detail += " · pairing: " + s.GUIDSource
+			detail += i18n.T("detail.pairing", s.GUIDSource)
 		}
 	}
 	_ = g.detailLbl.SetText(detail)
@@ -527,7 +552,7 @@ func (g *gui) refresh() {
 		_ = g.progLbl.SetText("")
 	}
 	if s.Counts.Total > 0 {
-		_ = g.countsLbl.SetText(fmt.Sprintf("On camera: %d · received: %d · missing: %d (%s) · failed: %d · excluded: %d",
+		_ = g.countsLbl.SetText(i18n.T("counts",
 			s.Counts.Total, s.Counts.Received, s.Counts.Missing, app.HumanBytes(s.Counts.MissingBytes), s.Counts.Failed, s.Counts.Excluded))
 	} else {
 		_ = g.countsLbl.SetText("")
@@ -553,7 +578,7 @@ func (g *gui) refresh() {
 	if g.ni != nil {
 		tip := config.AppName + "\n" + title
 		if p := s.Progress; p != nil && p.Speed > 0 {
-			tip = fmt.Sprintf("%s\n%d of %d · %s/s · %s left", config.AppName, p.Index, p.Count,
+			tip = config.AppName + "\n" + i18n.T("tray.tip", p.Index, p.Count,
 				app.HumanBytes(uint64(p.Speed)), app.HumanDuration(p.ETA))
 		}
 		if len(tip) > 120 {
@@ -587,7 +612,7 @@ func (g *gui) refresh() {
 func (g *gui) downloadSelected() {
 	keys := g.model.keys(g.table.SelectedIndexes())
 	if len(keys) == 0 {
-		walk.MsgBox(g.mw, config.AppName, "Select one or more files in the list first.", walk.MsgBoxIconInformation)
+		walk.MsgBox(g.mw, config.AppName, i18n.T("dlg.selectFirst"), walk.MsgBoxIconInformation)
 		return
 	}
 	g.ctl.DownloadKeys(keys)
@@ -595,7 +620,7 @@ func (g *gui) downloadSelected() {
 
 func (g *gui) connectIP() {
 	ip := g.ctl.Settings().ManualIP
-	if !inputBox(g.mw, "Connect to camera", "Camera IP address (shown on the camera or in your router):", &ip) {
+	if !inputBox(g.mw, i18n.T("dlg.connectTitle"), i18n.T("dlg.connectPrompt"), &ip) {
 		return
 	}
 	ip = strings.TrimSpace(ip)
@@ -627,8 +652,8 @@ func inputBox(owner walk.Form, title, prompt string, value *string) bool {
 				Layout: HBox{MarginsZero: true},
 				Children: []Widget{
 					HSpacer{},
-					PushButton{AssignTo: &ok, Text: "Connect", OnClicked: func() { *value = le.Text(); dlg.Accept() }},
-					PushButton{AssignTo: &cancel, Text: "Cancel", OnClicked: func() { dlg.Cancel() }},
+					PushButton{AssignTo: &ok, Text: i18n.T("btn.connect"), OnClicked: func() { *value = le.Text(); dlg.Accept() }},
+					PushButton{AssignTo: &cancel, Text: i18n.T("btn.cancel"), OnClicked: func() { dlg.Cancel() }},
 				},
 			},
 		},
@@ -637,7 +662,7 @@ func inputBox(owner walk.Form, title, prompt string, value *string) bool {
 }
 
 func (g *gui) browseDest() {
-	dlg := &walk.FileDialog{Title: "Choose the folder for received photos", InitialDirPath: g.destLE.Text()}
+	dlg := &walk.FileDialog{Title: i18n.T("dlg.chooseFolder"), InitialDirPath: g.destLE.Text()}
 	if ok, err := dlg.ShowBrowseFolder(g.mw); err == nil && ok {
 		_ = g.destLE.SetText(dlg.FilePath)
 		g.updatePatternExample()
@@ -646,7 +671,7 @@ func (g *gui) browseDest() {
 
 func (g *gui) currentPattern() string {
 	t := strings.TrimSpace(g.patternCB.Text())
-	if t == "(no subfolders)" {
+	if t == i18n.T("set.noSubfolders") {
 		return ""
 	}
 	return t
@@ -665,7 +690,7 @@ func (g *gui) loadSettingsIntoForm() {
 	_ = g.destLE.SetText(c.DestDir)
 	pat := c.FolderPattern
 	if pat == "" {
-		pat = "(no subfolders)"
+		pat = i18n.T("set.noSubfolders")
 	}
 	_ = g.patternCB.SetText(pat)
 	g.cbJPEG.SetChecked(c.IncludeJPEG)
@@ -681,6 +706,7 @@ func (g *gui) loadSettingsIntoForm() {
 	g.cbPMH.SetChecked(c.AcceptPMHPairing)
 	_ = g.guidLE.SetText(c.GUID)
 	_ = g.hostLE.SetText(c.HostName)
+	_ = g.langCB.SetCurrentIndex(languageIndex(c.Language))
 	g.updatePatternExample()
 }
 
@@ -701,34 +727,54 @@ func (g *gui) formSettings() config.Settings {
 	c.AcceptPMHPairing = g.cbPMH.Checked()
 	c.GUID = g.guidLE.Text()
 	c.HostName = strings.TrimSpace(g.hostLE.Text())
+	c.Language = languageCode(g.langCB.CurrentIndex())
 	return c
 }
 
 func (g *gui) saveSettings() {
 	c := g.formSettings()
+	oldLang := g.cfg.Language
 	if c.DestDir == "" {
-		walk.MsgBox(g.mw, config.AppName, "Choose a folder for received photos.", walk.MsgBoxIconWarning)
+		walk.MsgBox(g.mw, config.AppName, i18n.T("dlg.needFolder"), walk.MsgBoxIconWarning)
 		return
 	}
 	if err := os.MkdirAll(c.DestDir, 0o755); err != nil {
-		walk.MsgBox(g.mw, config.AppName, "Cannot create the folder:\n"+err.Error(), walk.MsgBoxIconError)
+		walk.MsgBox(g.mw, config.AppName, i18n.T("dlg.cannotCreate", err.Error()), walk.MsgBoxIconError)
 		return
 	}
 	_ = winutil.SetAutostart(legacyAutostart, false, "")
 	if err := winutil.SetAutostart(autostartName, c.StartWithWindows, "--tray"); err != nil {
-		walk.MsgBox(g.mw, config.AppName, "Could not change autostart:\n"+err.Error(), walk.MsgBoxIconWarning)
+		walk.MsgBox(g.mw, config.AppName, i18n.T("dlg.autostartErr", err.Error()), walk.MsgBoxIconWarning)
 	}
 	if err := config.Save(c); err != nil {
-		walk.MsgBox(g.mw, config.AppName, "Could not save settings:\n"+err.Error(), walk.MsgBoxIconError)
+		walk.MsgBox(g.mw, config.AppName, i18n.T("dlg.saveErr", err.Error()), walk.MsgBoxIconError)
 		return
 	}
 	g.cfg = c
 	g.ctl.SetSettings(c)
 	g.appendLog(time.Now().Format("15:04:05 ") + "Settings saved")
+	if c.Language != oldLang {
+		walk.MsgBox(g.mw, config.AppName, i18n.T("dlg.langRestart"), walk.MsgBoxIconInformation)
+		g.restart()
+	}
+}
+
+// restart starts a new copy of the program (it waits for this one to exit)
+// and closes this one, so that a new interface language takes effect.
+func (g *gui) restart() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	if err := exec.Command(exe, "--restarted").Start(); err != nil {
+		return
+	}
+	g.exiting = true
+	g.mw.Close()
 }
 
 func (g *gui) newGUID() {
-	if walk.MsgBox(g.mw, config.AppName, "Create a new ID for this PC?\n\nThe camera will have to be paired again (via USB) before it accepts the new ID.",
+	if walk.MsgBox(g.mw, config.AppName, i18n.T("dlg.newIDQuestion"),
 		walk.MsgBoxYesNo|walk.MsgBoxIconQuestion) != walk.DlgCmdYes {
 		return
 	}
@@ -737,12 +783,8 @@ func (g *gui) newGUID() {
 }
 
 func (g *gui) pairUSB() {
-	msg := "Pairing writes this PC's ID into the camera over USB.\n\n" +
-		"1. On the camera: MENU → Setup → USB Connection → Mass Storage.\n" +
-		"2. Connect the camera to this PC with a USB cable and turn it on.\n" +
-		"3. Wait until Windows shows the camera's memory card, then click OK.\n\n" +
-		"Windows will ask for administrator permission."
-	if walk.MsgBox(g.mw, "Pair camera via USB", msg, walk.MsgBoxOKCancel|walk.MsgBoxIconInformation) != walk.DlgCmdOK {
+	msg := i18n.T("dlg.pairInstr")
+	if walk.MsgBox(g.mw, i18n.T("dlg.pairTitle"), msg, walk.MsgBoxOKCancel|walk.MsgBoxIconInformation) != walk.DlgCmdOK {
 		return
 	}
 	g.saveSettings()
@@ -760,12 +802,11 @@ func (g *gui) pairUSB() {
 		}
 	}
 	if len(sony) == 0 {
-		found := "none"
+		found := i18n.T("dlg.none")
 		if len(names) > 0 {
 			found = strings.Join(names, "\n")
 		}
-		walk.MsgBox(g.mw, config.AppName, "No Sony camera in Mass Storage mode was found.\n\nUSB drives found:\n"+found+
-			"\n\nCheck the camera's USB Connection setting (Mass Storage) and that a memory card is inserted.", walk.MsgBoxIconWarning)
+		walk.MsgBox(g.mw, config.AppName, i18n.T("dlg.noCamera", found), walk.MsgBoxIconWarning)
 		return
 	}
 	d := sony[0]
@@ -788,13 +829,11 @@ func (g *gui) pairUSB() {
 	}
 	if perr != nil {
 		g.appendLog(time.Now().Format("15:04:05 ") + "Pairing failed: " + perr.Error())
-		walk.MsgBox(g.mw, config.AppName, "Pairing failed:\n"+perr.Error()+
-			"\n\nIf this keeps failing, pair the camera once with PlayMemories Home; this program accepts that pairing too.", walk.MsgBoxIconError)
+		walk.MsgBox(g.mw, config.AppName, i18n.T("dlg.pairFail", perr.Error()), walk.MsgBoxIconError)
 		return
 	}
 	g.appendLog(time.Now().Format("15:04:05 ") + "Pairing command accepted by the camera")
-	walk.MsgBox(g.mw, config.AppName, "Done. The camera accepted the pairing command.\n\n"+
-		"Disconnect the USB cable, then start MENU → Wireless → Send to Computer on the camera.", walk.MsgBoxIconInformation)
+	walk.MsgBox(g.mw, config.AppName, i18n.T("dlg.pairOK"), walk.MsgBoxIconInformation)
 }
 
 func (g *gui) addFirewall() {
@@ -813,10 +852,10 @@ func (g *gui) addFirewall() {
 		}
 	}
 	if err != nil {
-		walk.MsgBox(g.mw, config.AppName, "Could not add the firewall rule:\n"+err.Error(), walk.MsgBoxIconError)
+		walk.MsgBox(g.mw, config.AppName, i18n.T("dlg.fwFail", err.Error()), walk.MsgBoxIconError)
 		return
 	}
-	walk.MsgBox(g.mw, config.AppName, "Firewall rule added: camera announcements (UDP 1900) from the local network are allowed for this program.", walk.MsgBoxIconInformation)
+	walk.MsgBox(g.mw, config.AppName, i18n.T("dlg.fwOK"), walk.MsgBoxIconInformation)
 }
 
 func (g *gui) warnAboutPMH() {

@@ -40,6 +40,9 @@ type Camera struct {
 	AllowedGUID map[[16]byte]bool // empty = accept any GUID
 	Files       []*File
 	Logf        func(string, ...any)
+	// Rate limits GetObject to this many bytes per second (0 = unlimited),
+	// to simulate the camera's Wi-Fi speed in demos.
+	Rate int64
 
 	// Observed by tests.
 	mu          sync.Mutex
@@ -78,6 +81,24 @@ func New(model string, pairs int) *Camera {
 func (c *Camera) logf(f string, a ...any) {
 	if c.Logf != nil {
 		c.Logf("[fakecam] "+f, a...)
+	}
+}
+
+// SetSizes regenerates file contents with realistic sizes (bytes) for JPEG
+// and RAW files; each file varies by up to ±10 %.
+func (c *Camera) SetSizes(jpeg, raw int) {
+	for i, f := range c.Files {
+		size := jpeg
+		if strings.HasSuffix(f.Name, ".ARW") {
+			size = raw
+		}
+		size += (i*7919)%(size/5+1) - size/10
+		b := make([]byte, size)
+		_, _ = rand.Read(b)
+		if strings.HasSuffix(f.Name, ".JPG") && size > 4 {
+			copy(b, []byte{0xFF, 0xD8, 0xFF, 0xE1})
+		}
+		f.Data = b
 	}
 }
 
@@ -229,7 +250,11 @@ func (c *Camera) commandLoop(conn net.Conn) {
 		}
 		code, data := c.handle(op, params, dataOut, &session)
 		if data != nil {
-			sendData(conn, tid, data)
+			rate := int64(0)
+			if op == ptpip.OpGetObject {
+				rate = c.Rate
+			}
+			sendData(conn, tid, data, rate)
 		}
 		resp := le.AppendUint16(nil, code)
 		resp = le.AppendUint32(resp, tid)
@@ -241,7 +266,9 @@ func (c *Camera) commandLoop(conn net.Conn) {
 	}
 }
 
-func sendData(conn net.Conn, tid uint32, data []byte) {
+func sendData(conn net.Conn, tid uint32, data []byte, rate int64) {
+	began := time.Now()
+	var sent int64
 	start := le.AppendUint32(nil, tid)
 	start = le.AppendUint64(start, uint64(len(data)))
 	_ = ptpip.WritePacket(conn, ptpip.PktStartData, start)
@@ -256,6 +283,13 @@ func sendData(conn net.Conn, tid uint32, data []byte) {
 		pl = append(pl, data[:n]...)
 		_ = ptpip.WritePacket(conn, t, pl)
 		data = data[n:]
+		sent += int64(n)
+		if rate > 0 {
+			// sleep until the average speed matches the rate
+			if wait := time.Duration(float64(sent)/float64(rate)*float64(time.Second)) - time.Since(began); wait > 0 {
+				time.Sleep(wait)
+			}
+		}
 		if t == ptpip.PktEndData {
 			return
 		}

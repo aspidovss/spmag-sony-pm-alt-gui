@@ -15,4 +15,10 @@ mkdir -p dist
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=$VERSION" -o dist/SPMAG-WifiPhotoReceiver.exe ./cmd/WifiPhotoReceiver
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o dist/wpr.exe ./cmd/wpr
 cp README.md LICENSE dist/
-ls -la dist
+# Linux: command-line tool / service (wpr watch)
+for arch in amd64 arm64; do
+  mkdir -p "dist/linux-$arch"
+  GOOS=linux GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "dist/linux-$arch/wpr" ./cmd/wpr
+  cp README.md LICENSE packaging/linux/spmag-wpr.service "dist/linux-$arch/"
+done
+ls -la dist dist/linux-*

@@ -40,6 +40,7 @@ type Settings struct {
 	AcceptPMHPairing bool   `json:"accept_pmh_pairing"` // also try PlayMemories-style (MAC) GUIDs
 	HostName         string `json:"host_name"`          // name shown on the camera; "" = computer name
 	ManualIP         string `json:"manual_ip"`
+	Language         string `json:"language"` // "" = system language, else en, ru, de, ...
 }
 
 // Defaults returns the default settings.
@@ -62,8 +63,15 @@ func Defaults() Settings {
 	}
 }
 
+// DirEnv overrides the data folder (e.g. for a demo or a portable setup).
+const DirEnv = "SPMAG_CONFIG_DIR"
+
 // Dir returns the per-user data folder (created on demand).
 func Dir() string {
+	if d := os.Getenv(DirEnv); d != "" {
+		_ = os.MkdirAll(d, 0o755)
+		return d
+	}
 	base, err := os.UserConfigDir() // %APPDATA% on Windows
 	if err != nil || base == "" {
 		base = os.TempDir()
@@ -92,6 +100,10 @@ func path() string { return filepath.Join(Dir(), "settings.json") }
 // Load reads settings, filling in defaults; a fresh GUID is saved on first run.
 func Load() (Settings, error) {
 	s := Defaults()
+	if os.Getenv(DirEnv) != "" {
+		// separate data folder: keep its photos next to it by default
+		s.DestDir = filepath.Join(Dir(), "photos")
+	}
 	b, err := os.ReadFile(path())
 	if err != nil {
 		if os.IsNotExist(err) {
