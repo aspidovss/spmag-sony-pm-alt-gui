@@ -1,0 +1,11 @@
+#!/bin/sh
+# AppRun of the SPMAG Wifi Photo Receiver AppImage.
+#   no arguments  -> start the receiver with the web interface and open it in the
+#                    browser (what a double click in the file manager does)
+#   any arguments -> passed to wpr, e.g.  ./SPMAG-wpr-x86_64.AppImage watch -h
+#                                         sudo ./SPMAG-wpr-x86_64.AppImage pair
+HERE="$(dirname "$(readlink -f "$0")")"
+if [ "$#" -eq 0 ]; then
+    set -- watch -ui
+fi
+exec "$HERE/usr/bin/wpr" "$@"

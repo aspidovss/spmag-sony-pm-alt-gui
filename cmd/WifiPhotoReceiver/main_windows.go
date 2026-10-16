@@ -25,6 +25,7 @@ import (
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/pairing"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/store"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/transfer"
+	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/web"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/winutil"
 )
 
@@ -119,6 +120,13 @@ type gui struct {
 	cbJPEG, cbRAW, cbVideo, cbOther        *walk.CheckBox
 	cbAuto, cbFinish, cbMatch, cbStartWin  *walk.CheckBox
 	cbStartMin, cbNotify, cbPMH            *walk.CheckBox
+	// web interface (settings page)
+	cbWeb, cbWebRemote   *walk.CheckBox
+	webPortNE            *walk.NumberEdit
+	webUserLE, webPassLE *walk.LineEdit
+	webStatusLbl         *walk.Label
+	webMgr               *web.Manager
+	webLogs              web.LogBuffer
 	// log page
 	logTE  *walk.TextEdit
 	langCB *walk.ComboBox
@@ -196,6 +204,7 @@ func (g *gui) run(startHidden bool) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	g.ctl.Start(ctx)
+	g.startWeb()
 	g.appendLog(time.Now().Format("15:04:05 ") + fmt.Sprintf("%s %s © 2026 AspidovSS — %s", config.AppName, version, config.RepoURL))
 	g.appendLog(time.Now().Format("15:04:05 ") + "Settings and database: " + config.Dir())
 	g.warnAboutPMH()
@@ -203,6 +212,9 @@ func (g *gui) run(startHidden bool) {
 
 	g.mw.Run()
 	cancel()
+	if g.webMgr != nil {
+		g.webMgr.Stop()
+	}
 	select {
 	case <-g.ctl.Stopped():
 	case <-time.After(5 * time.Second):
@@ -383,6 +395,30 @@ func (g *gui) settingsPage() TabPage {
 								},
 							},
 							TextLabel{ColumnSpan: 3, Text: i18n.T("set.pairHelp")},
+						},
+					},
+					GroupBox{
+						Title:  i18n.T("set.web"),
+						Layout: Grid{Columns: 4},
+						Children: []Widget{
+							CheckBox{AssignTo: &g.cbWeb, ColumnSpan: 4, Text: i18n.T("set.webEnable")},
+							Label{Text: i18n.T("set.webPort")},
+							NumberEdit{AssignTo: &g.webPortNE, MinValue: 1, MaxValue: 65535, Decimals: 0, MinSize: Size{Width: 70}},
+							Label{Text: i18n.T("set.webUser")},
+							LineEdit{AssignTo: &g.webUserLE, CueBanner: config.DefaultWebUser, MaxLength: 64},
+							Label{Text: i18n.T("set.webPass")},
+							LineEdit{AssignTo: &g.webPassLE, PasswordMode: true, ColumnSpan: 3, MaxLength: 200},
+							CheckBox{AssignTo: &g.cbWebRemote, ColumnSpan: 4, Text: i18n.T("set.webRemote")},
+							Composite{
+								ColumnSpan: 4,
+								Layout:     HBox{MarginsZero: true},
+								Children: []Widget{
+									Label{AssignTo: &g.webStatusLbl},
+									HSpacer{},
+									PushButton{Text: i18n.T("set.webOpen"), OnClicked: g.openWeb},
+								},
+							},
+							TextLabel{ColumnSpan: 4, Text: i18n.T("set.webHint")},
 						},
 					},
 					GroupBox{
@@ -707,6 +743,13 @@ func (g *gui) loadSettingsIntoForm() {
 	_ = g.guidLE.SetText(c.GUID)
 	_ = g.hostLE.SetText(c.HostName)
 	_ = g.langCB.SetCurrentIndex(languageIndex(c.Language))
+	a := web.AccessFrom(c).Normalize()
+	g.cbWeb.SetChecked(a.Enabled)
+	_ = g.webPortNE.SetValue(float64(a.Port))
+	_ = g.webUserLE.SetText(a.User)
+	_ = g.webPassLE.SetText(a.Password)
+	g.cbWebRemote.SetChecked(a.Remote)
+	g.updateWebStatus()
 	g.updatePatternExample()
 }
 
@@ -728,6 +771,13 @@ func (g *gui) formSettings() config.Settings {
 	c.GUID = g.guidLE.Text()
 	c.HostName = strings.TrimSpace(g.hostLE.Text())
 	c.Language = languageCode(g.langCB.CurrentIndex())
+	web.Access{
+		Enabled:  g.cbWeb.Checked(),
+		Port:     int(g.webPortNE.Value()),
+		User:     g.webUserLE.Text(),
+		Password: g.webPassLE.Text(),
+		Remote:   g.cbWebRemote.Checked(),
+	}.Normalize().Apply(&c)
 	return c
 }
 
@@ -742,6 +792,11 @@ func (g *gui) saveSettings() {
 		walk.MsgBox(g.mw, config.AppName, i18n.T("dlg.cannotCreate", err.Error()), walk.MsgBoxIconError)
 		return
 	}
+	access := web.AccessFrom(c)
+	if err := access.Validate(); err != nil {
+		walk.MsgBox(g.mw, config.AppName, err.Error(), walk.MsgBoxIconWarning)
+		return
+	}
 	_ = winutil.SetAutostart(legacyAutostart, false, "")
 	if err := winutil.SetAutostart(autostartName, c.StartWithWindows, "--tray"); err != nil {
 		walk.MsgBox(g.mw, config.AppName, i18n.T("dlg.autostartErr", err.Error()), walk.MsgBoxIconWarning)
@@ -753,6 +808,11 @@ func (g *gui) saveSettings() {
 	g.cfg = c
 	g.ctl.SetSettings(c)
 	g.appendLog(time.Now().Format("15:04:05 ") + "Settings saved")
+	if err := g.webMgr.Apply(access); err != nil {
+		g.appendLog(time.Now().Format("15:04:05 ") + "Web interface: " + err.Error())
+		walk.MsgBox(g.mw, config.AppName, i18n.T("set.webError", err.Error()), walk.MsgBoxIconWarning)
+	}
+	g.updateWebStatus()
 	if c.Language != oldLang {
 		walk.MsgBox(g.mw, config.AppName, i18n.T("dlg.langRestart"), walk.MsgBoxIconInformation)
 		g.restart()
@@ -883,6 +943,7 @@ func (g *gui) openLogFile() {
 }
 
 func (g *gui) appendLog(line string) {
+	g.webLogs.Append(line)
 	g.logMu.Lock()
 	if g.logF != nil {
 		fmt.Fprintf(g.logF, "%s\r\n", line)
@@ -940,4 +1001,55 @@ func helperFirewall(args []string) int {
 	}
 	writeResult(res, "OK")
 	return 0
+}
+
+// ---------------------------------------------------------------------------
+// web interface
+
+// startWeb creates the web server manager and starts the server if the
+// settings ask for it. A problem (port in use…) is logged and shown in the
+// settings, the program itself keeps working.
+func (g *gui) startWeb() {
+	g.webMgr = web.NewManager(web.Options{Ctl: g.ctl, Logs: &g.webLogs, Version: version})
+	// settings saved from the web page: show them in this window's form too
+	g.webMgr.OnSettings = func(c config.Settings) {
+		g.mw.Synchronize(func() {
+			g.cfg = c
+			g.loadSettingsIntoForm()
+		})
+	}
+	a := web.AccessFrom(g.cfg)
+	if !a.Enabled {
+		g.updateWebStatus()
+		return
+	}
+	if err := g.webMgr.Apply(a); err != nil {
+		g.appendLog(time.Now().Format("15:04:05 ") + "Web interface: " + err.Error())
+	} else {
+		g.appendLog(time.Now().Format("15:04:05 ") + "Web interface: http://" + g.webMgr.Status().Addr)
+	}
+	g.updateWebStatus()
+}
+
+func (g *gui) updateWebStatus() {
+	if g.webStatusLbl == nil || g.webMgr == nil {
+		return
+	}
+	st := g.webMgr.Status()
+	switch {
+	case st.Err != "":
+		_ = g.webStatusLbl.SetText(i18n.T("set.webError", st.Err))
+	case st.Running:
+		_ = g.webStatusLbl.SetText(i18n.T("set.webRunning", "http://"+st.Addr))
+	default:
+		_ = g.webStatusLbl.SetText(i18n.T("set.webStopped"))
+	}
+}
+
+func (g *gui) openWeb() {
+	if st := g.webMgr.Status(); st.Running {
+		winutil.OpenURL(st.URL())
+		return
+	}
+	walk.MsgBox(g.mw, config.AppName, i18n.T("set.webStopped"), walk.MsgBoxIconInformation)
 }

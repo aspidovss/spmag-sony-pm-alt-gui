@@ -6,12 +6,10 @@ package web
 
 import (
 	"compress/gzip"
-	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"embed"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -39,12 +37,20 @@ type Options struct {
 	Ctl     *app.Controller
 	Logs    *LogBuffer
 	Version string
-	// Password enables HTTP Basic authentication (any user name). Empty means
-	// no authentication, which is only acceptable on a loopback address.
+	// User and Password enable HTTP Basic authentication. An empty User accepts
+	// any user name. An empty Password means no authentication, which is only
+	// acceptable on a loopback address.
+	User     string
 	Password string
 	// LoopbackOnly restricts the Host header to localhost / loopback IPs, which
 	// defeats DNS-rebinding attacks against an unauthenticated local server.
 	LoopbackOnly bool
+	// Manager, when set, lets the settings page change the web options
+	// (enable, port, login, password) while the program runs.
+	Manager *Manager
+	// Quit, when set, adds an "Exit" button to the page that stops the program
+	// (used by the AppImage, which has no window or tray icon of its own).
+	Quit func()
 }
 
 // LogBuffer keeps the most recent log lines for the Log tab.
@@ -97,10 +103,11 @@ func IsLoopbackAddr(addr string) bool {
 }
 
 type server struct {
-	o      Options
-	pwHash [32]byte
-	usePW  bool
-	static http.Handler
+	o        Options
+	pwHash   [32]byte
+	userHash [32]byte
+	usePW    bool
+	static   http.Handler
 }
 
 // Handler returns the HTTP handler of the web interface.
@@ -113,6 +120,7 @@ func Handler(o Options) http.Handler {
 	if o.Password != "" {
 		s.usePW = true
 		s.pwHash = sha256.Sum256([]byte(o.Password))
+		s.userHash = sha256.Sum256([]byte(o.User))
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/state", s.getState)
@@ -122,27 +130,9 @@ func Handler(o Options) http.Handler {
 	mux.HandleFunc("/api/action", s.action)
 	mux.HandleFunc("/api/usb", s.usb)
 	mux.HandleFunc("/api/pair", s.pair)
+	mux.HandleFunc("/api/quit", s.quit)
 	mux.Handle("/", s.static)
 	return s.guard(mux)
-}
-
-// Serve runs the handler on addr until ctx is cancelled.
-func Serve(ctx context.Context, addr string, h http.Handler) error {
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return err
-	}
-	srv := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
-	go func() {
-		<-ctx.Done()
-		sc, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		_ = srv.Shutdown(sc)
-	}()
-	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return err
-	}
-	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -174,9 +164,12 @@ func (s *server) guard(next http.Handler) http.Handler {
 			return
 		}
 		if s.usePW {
-			_, pw, ok := r.BasicAuth()
+			user, pw, ok := r.BasicAuth()
 			sum := sha256.Sum256([]byte(pw))
-			if !ok || subtle.ConstantTimeCompare(sum[:], s.pwHash[:]) != 1 {
+			usum := sha256.Sum256([]byte(user))
+			userOK := subtle.ConstantTimeCompare(usum[:], s.userHash[:]) == 1 || s.o.User == ""
+			passOK := subtle.ConstantTimeCompare(sum[:], s.pwHash[:]) == 1
+			if !ok || !userOK || !passOK {
 				time.Sleep(400 * time.Millisecond) // slow down guessing
 				h.Set("WWW-Authenticate", `Basic realm="`+config.AppName+`", charset="UTF-8"`)
 				http.Error(w, "authentication required", http.StatusUnauthorized)
@@ -261,6 +254,7 @@ type stateDTO struct {
 	Detail   string       `json:"detail"`
 	Counts   string       `json:"counts"`
 	Paused   bool         `json:"paused"`
+	CanQuit  bool         `json:"canQuit"`
 	Progress *progressDTO `json:"progress"`
 	Items    []itemDTO    `json:"items"`
 }
@@ -269,7 +263,7 @@ func (s *server) getState(w http.ResponseWriter, r *http.Request) {
 	snap := s.o.Ctl.Snapshot()
 	d := stateDTO{
 		Version: s.o.Version, Lang: i18n.Current(), State: int(snap.State),
-		Title: snap.Title(), Detail: snap.Detail(), Counts: snap.CountsText(), Paused: snap.Paused,
+		Title: snap.Title(), Detail: snap.Detail(), Counts: snap.CountsText(), Paused: snap.Paused, CanQuit: s.o.Quit != nil,
 		Items: make([]itemDTO, 0, len(snap.Items)),
 	}
 	if p := snap.Progress; p != nil && p.QueueBytes > 0 {
@@ -322,17 +316,51 @@ type settingsDTO struct {
 	GUID          string `json:"guid"`
 	HostName      string `json:"hostName"`
 	Language      string `json:"language"`
+
+	// web interface options (the password is only ever received, never sent)
+	WebEnabled       bool   `json:"webEnabled"`
+	WebPort          int    `json:"webPort"`
+	WebUser          string `json:"webUser"`
+	WebPassword      string `json:"webPassword,omitempty"`
+	WebClearPassword bool   `json:"webClearPassword,omitempty"`
+	WebRemote        bool   `json:"webRemote"`
+}
+
+type webStatusDTO struct {
+	Running bool   `json:"running"`
+	Addr    string `json:"addr"`
+	Error   string `json:"error"`
 }
 
 type settingsReply struct {
 	settingsDTO
 	Languages    []i18n.Language `json:"languages"`
 	USBSupported bool            `json:"usbSupported"`
+	WebPassSet   bool            `json:"webPasswordSet"`
+	WebLocked    bool            `json:"webLocked"` // fixed by command-line options
+	WebStatus    webStatusDTO    `json:"webStatus"`
+	WebRestart   bool            `json:"webRestart,omitempty"`
 }
 
-func toDTO(c config.Settings) settingsDTO {
-	return settingsDTO{c.DestDir, c.FolderPattern, c.IncludeJPEG, c.IncludeRAW, c.IncludeVideo, c.IncludeOther,
-		c.AutoDownload, c.FinishAfterAuto, c.MatchExisting, c.AcceptPMHPairing, c.GUID, c.HostName, c.Language}
+func (s *server) reply(c config.Settings, restart bool) settingsReply {
+	a := AccessFrom(c).Normalize()
+	r := settingsReply{
+		settingsDTO: settingsDTO{
+			DestDir: c.DestDir, FolderPattern: c.FolderPattern,
+			JPEG: c.IncludeJPEG, RAW: c.IncludeRAW, Video: c.IncludeVideo, Other: c.IncludeOther,
+			Auto: c.AutoDownload, Finish: c.FinishAfterAuto, Match: c.MatchExisting, PMH: c.AcceptPMHPairing,
+			GUID: c.GUID, HostName: c.HostName, Language: c.Language,
+			WebEnabled: a.Enabled, WebPort: a.Port, WebUser: a.User, WebRemote: a.Remote,
+		},
+		Languages: i18n.Languages, USBSupported: pairing.USBSupported,
+		WebPassSet: a.Password != "", WebRestart: restart,
+	}
+	if m := s.o.Manager; m != nil {
+		st := m.Status()
+		r.WebStatus = webStatusDTO{Running: st.Running, Addr: st.Addr, Error: st.Err}
+		r.WebLocked = m.Pinned()
+	}
+	return r
 }
 
 func validPattern(p string) bool {
@@ -361,7 +389,7 @@ func (s *server) saveSettings(c config.Settings) error {
 func (s *server) settings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, r, http.StatusOK, settingsReply{toDTO(s.o.Ctl.Settings()), i18n.Languages, pairing.USBSupported})
+		writeJSON(w, r, http.StatusOK, s.reply(s.o.Ctl.Settings(), false))
 	case http.MethodPost:
 		var in settingsDTO
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -392,12 +420,43 @@ func (s *server) settings(w http.ResponseWriter, r *http.Request) {
 		c.AutoDownload, c.FinishAfterAuto, c.MatchExisting, c.AcceptPMHPairing = in.Auto, in.Finish, in.Match, in.PMH
 		c.HostName = strings.TrimSpace(in.HostName)
 		c.Language = in.Language
+
+		// Web access options: only when this server can restart itself and
+		// the command line has not fixed them.
+		var newAccess *Access
+		if m := s.o.Manager; m != nil && !m.Pinned() {
+			pw := in.WebPassword
+			if pw == "" && !in.WebClearPassword {
+				pw = c.WebPassword
+			}
+			a := Access{Enabled: in.WebEnabled, Port: in.WebPort, User: in.WebUser, Password: pw, Remote: in.WebRemote}.Normalize()
+			if err := a.Validate(); err != nil {
+				writeErr(w, r, http.StatusBadRequest, err.Error())
+				return
+			}
+			if a != AccessFrom(c).Normalize() {
+				newAccess = &a
+			}
+			a.Apply(&c)
+		}
+
 		i18n.Set(c.Language)
 		if err := s.saveSettings(c); err != nil {
 			writeErr(w, r, http.StatusInternalServerError, i18n.T("dlg.saveErr", err.Error()))
 			return
 		}
-		writeJSON(w, r, http.StatusOK, settingsReply{toDTO(c), i18n.Languages, pairing.USBSupported})
+		if newAccess != nil {
+			// Restart the listener after this reply has gone out.
+			m, a := s.o.Manager, *newAccess
+			go func() {
+				time.Sleep(400 * time.Millisecond)
+				_ = m.Apply(a)
+			}()
+		}
+		if m := s.o.Manager; m != nil && m.OnSettings != nil {
+			m.OnSettings(c)
+		}
+		writeJSON(w, r, http.StatusOK, s.reply(c, newAccess != nil))
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -471,6 +530,22 @@ func (s *server) action(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, r, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *server) quit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.o.Quit == nil {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, r, http.StatusOK, map[string]bool{"ok": true})
+	go func() {
+		time.Sleep(300 * time.Millisecond) // let the reply go out
+		s.o.Quit()
+	}()
 }
 
 // ---------------------------------------------------------------------------

@@ -3,7 +3,8 @@
 //
 //	wpr watch [-web ADDR]   run in the background: receive photos whenever the
 //	                        camera starts "Send to Computer" (Linux service, Docker);
-//	                        -web serves a browser interface
+//	                        -web serves a browser interface; -ui turns the local
+//	                        interface on and opens it (what the AppImage does)
 //	wpr discover            listen for cameras in "Send to Computer" mode
 //	wpr list   [-ip IP]     connect and show which files are received/missing
 //	wpr pull   [-ip IP]     download missing files, then tell the camera "done"
@@ -18,11 +19,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -413,20 +418,38 @@ func cmdWatch(ctx context.Context, args []string) error {
 	save := fs.Bool("save", false, "save these options to the settings file")
 	webAddr := fs.String("web", os.Getenv("SPMAG_WEB"), "serve the web interface on this address, e.g. 127.0.0.1:8080 or :8080 (env SPMAG_WEB)")
 	webPass := fs.String("web-password", os.Getenv("SPMAG_WEB_PASSWORD"), "password for the web interface (env SPMAG_WEB_PASSWORD); required unless the address is loopback")
+	webUser := fs.String("web-user", os.Getenv("SPMAG_WEB_USER"), "login for the web interface (env SPMAG_WEB_USER); empty = any user name")
+	ui := fs.Bool("ui", false, "turn the web interface on (this computer only, unless settings say otherwise) and open it in the browser")
 	webOpen := fs.Bool("web-no-auth", false, "allow the web interface on a network address without a password (not recommended)")
 	lang := fs.String("lang", "", "language of the web interface and status texts: en, zh, es, fr, de, pt, ru, ja, ko, it (default: settings, then system)")
 	_ = fs.Parse(args)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	if *ui && *webAddr == "" && alreadyRunning(cfg) {
+		return nil
+	}
+	if *ui && *webAddr == "" && !cfg.WebEnabled {
+		// remember it, so the settings page shows what is running
+		if st, err := config.Load(); err == nil {
+			st.WebEnabled = true
+			_ = config.Save(st)
+		}
+		cfg.WebEnabled = true
+	}
+	// The web interface comes from -web (fixed) or from the saved settings.
+	webOn := *webAddr != "" || cfg.WebEnabled
 
 	cfg.DestDir = *dest
 	cfg.FolderPattern = *pattern
 	cfg.HostName = *name
 	cfg.AcceptPMHPairing = *pmh
-	if *webAddr == "" {
+	if !webOn {
 		cfg.AutoDownload = true // headless service: always receive automatically
 	}
 	if *noFinish {
 		cfg.FinishAfterAuto = false
-	} else if *webAddr == "" {
+	} else if !webOn {
 		cfg.FinishAfterAuto = true
 	}
 	if *lang != "" {
@@ -480,22 +503,42 @@ func cmdWatch(ctx context.Context, args []string) error {
 		}
 	}
 	c.Start(ctx)
-	if *webAddr != "" {
-		loop := web.IsLoopbackAddr(*webAddr)
-		if !loop && *webPass == "" && !*webOpen {
-			return fmt.Errorf("the web interface on %s would be open to the network: set -web-password (or SPMAG_WEB_PASSWORD), use a 127.0.0.1 address, or pass -web-no-auth", *webAddr)
-		}
-		h := web.Handler(web.Options{Ctl: c, Logs: &logs, Version: version, Password: *webPass, LoopbackOnly: loop && *webPass == ""})
-		go func() {
-			if err := web.Serve(ctx, *webAddr, h); err != nil {
-				fmt.Fprintln(os.Stderr, "web interface:", err)
+	wopts := web.Options{Ctl: c, Logs: &logs, Version: version}
+	if *ui {
+		wopts.Quit = cancel // the page gets an Exit button
+	}
+	mgr := web.NewManager(wopts)
+	defer mgr.Stop()
+	switch {
+	case *webAddr != "":
+		// fixed on the command line: the settings page cannot change it
+		mgr.Pin()
+		l := web.Listen{Addr: *webAddr, User: *webUser, Password: *webPass}
+		if err := mgr.Start(l, *webOpen); err != nil {
+			if !web.IsLoopbackAddr(*webAddr) && *webPass == "" && !*webOpen {
+				return fmt.Errorf("the web interface on %s would be open to the network: set -web-password (or SPMAG_WEB_PASSWORD), use a 127.0.0.1 address, or pass -web-no-auth", *webAddr)
 			}
-		}()
+			return fmt.Errorf("web interface: %w", err)
+		}
 		auth := "password protected"
 		if *webPass == "" {
 			auth = "NO password"
 		}
-		fmt.Printf("  web:       http://%s (%s)\n", displayAddr(*webAddr), auth)
+		fmt.Printf("  web:       http://%s (%s)\n", mgr.Status().Addr, auth)
+	case cfg.WebEnabled:
+		if err := mgr.Apply(web.AccessFrom(cfg)); err != nil {
+			// keep receiving; the problem can be fixed in the settings
+			fmt.Fprintln(os.Stderr, "web interface:", err)
+		} else {
+			auth := "password protected"
+			if cfg.WebPassword == "" {
+				auth = "this computer only"
+			}
+			fmt.Printf("  web:       http://%s (%s)\n", mgr.Status().Addr, auth)
+		}
+	}
+	if st := mgr.Status(); *ui && st.Running {
+		openBrowser(st.URL())
 	}
 	<-ctx.Done()
 	fmt.Println("stopping…")
@@ -504,13 +547,6 @@ func cmdWatch(ctx context.Context, args []string) error {
 	case <-time.After(10 * time.Second):
 	}
 	return nil
-}
-
-func displayAddr(a string) string {
-	if strings.HasPrefix(a, ":") {
-		return "localhost" + a
-	}
-	return a
 }
 
 func typesString(cfg config.Settings) string {
@@ -550,4 +586,44 @@ func applyTypes(cfg *config.Settings, s string) error {
 		}
 	}
 	return nil
+}
+
+// alreadyRunning handles a second start of the desktop (-ui) mode: when the
+// web interface port is taken, assume it is this program, show it and quit.
+func alreadyRunning(cfg config.Settings) bool {
+	a := web.AccessFrom(cfg).Normalize()
+	ln, err := net.Listen("tcp", a.Listen().Addr)
+	if err == nil {
+		_ = ln.Close()
+		return false
+	}
+	if !errors.Is(err, syscall.EADDRINUSE) {
+		return false
+	}
+	url := fmt.Sprintf("http://localhost:%d", a.Port)
+	fmt.Println("already running, opening", url)
+	openBrowser(url)
+	return true
+}
+
+// openBrowser opens url in the default browser when a desktop session exists.
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	default:
+		if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
+			return
+		}
+		if _, err := exec.LookPath("xdg-open"); err != nil {
+			return
+		}
+		cmd = exec.Command("xdg-open", url)
+	}
+	if cmd.Start() == nil {
+		go cmd.Wait()
+	}
 }

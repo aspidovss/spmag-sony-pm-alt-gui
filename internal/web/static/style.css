@@ -29,12 +29,12 @@ main { margin: 0 16px; background: var(--panel); border: 1px solid var(--line); 
 .progtext { flex: 2 1 280px; color: var(--muted); }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; }
 .grow { flex: 1; }
-button, select, input[type=text] { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; }
+button, select, input[type=text], input[type=password], input[type=number] { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; }
 button { cursor: pointer; }
 button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: .45; cursor: default; }
 button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-input[type=text] { width: 100%; }
+input[type=text], input[type=password], input[type=number] { width: 100%; }
 #ip { width: 11em; }
 .counts { color: var(--muted); }
 .tablewrap { overflow: auto; max-height: 62vh; border: 1px solid var(--line); border-radius: 6px; }

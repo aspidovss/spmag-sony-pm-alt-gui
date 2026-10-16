@@ -6,6 +6,8 @@
 package main
 
 import (
+	"bytes"
+	"image/png"
 	"log"
 	"os"
 	"path/filepath"
@@ -48,8 +50,15 @@ func main() {
 	if err := os.WriteFile(filepath.Join("build", "app.ico"), ico, 0o644); err != nil {
 		log.Fatal(err)
 	}
+	var pngBuf bytes.Buffer
+	if err := png.Encode(&pngBuf, icon.Draw(256, icon.Lens)); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("build", "app-256.png"), pngBuf.Bytes(), 0o644); err != nil {
+		log.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join("build", "app.manifest"), []byte(manifest), 0o644); err != nil {
 		log.Fatal(err)
 	}
-	log.Println("wrote build/app.ico and build/app.manifest")
+	log.Println("wrote build/app.ico, build/app-256.png and build/app.manifest")
 }

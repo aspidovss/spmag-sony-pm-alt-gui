@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the Windows executables into dist/.
+# Builds the Windows executables, Linux binaries, .deb and AppImage packages into dist/.
 # Requires Go 1.22+ (rsrc is installed automatically).
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -28,5 +28,16 @@ if command -v dpkg-deb >/dev/null; then
   done
 else
   echo "dpkg-deb not found: skipping .deb packages"
+fi
+# AppImage (needs curl; appimagetool is downloaded on first use; SKIP_APPIMAGE=1 skips)
+if [ -z "${SKIP_APPIMAGE:-}" ] && command -v curl >/dev/null; then
+  for arch in amd64 arm64; do
+    if ! bash packaging/linux/appimage/build-appimage.sh "$arch" "$VERSION" "dist/linux-$arch/wpr" build/app-256.png dist; then
+      [ -n "${CI:-}" ] && exit 1   # on a build server a missing AppImage is an error
+      echo "AppImage for $arch could not be built (offline?): skipped"
+    fi
+  done
+else
+  echo "AppImage skipped"
 fi
 ls -la dist dist/linux-*

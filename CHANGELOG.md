@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.4.0
+
+- **AppImage** for Linux (amd64 and arm64): one file, no installation. Started
+  without arguments it runs the receiver, opens the browser interface for this
+  computer and offers an *Exit* button; with arguments it works like `wpr`
+  (`wpr watch -ui` does the same from the command line). A second start just
+  opens the page again.
+- **Web interface settings** in the Windows program and on the Linux page:
+  turn it on or off, port, login, password, and whether other computers may
+  connect (a password is then required). Changes apply when you save, no
+  restart; the page follows a changed port. Available in all 10 languages.
+- The web interface now exists in the Windows program too (same page, same
+  API). Command-line options (`-web`, `-web-user`, `SPMAG_WEB*`) still take
+  precedence and make the page's web options read-only.
+- `settings.json` is now written readable only by its owner (it can hold the
+  web password).
+
 ## v0.3.0
 
 - **Browser interface** (`wpr watch -web ADDR`, also in Docker): status, speed and

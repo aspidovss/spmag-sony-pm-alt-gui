@@ -41,7 +41,20 @@ type Settings struct {
 	HostName         string `json:"host_name"`          // name shown on the camera; "" = computer name
 	ManualIP         string `json:"manual_ip"`
 	Language         string `json:"language"` // "" = system language, else en, ru, de, ...
+
+	// Web interface (browser access). Off by default.
+	WebEnabled  bool   `json:"web_enabled"`
+	WebPort     int    `json:"web_port"`     // TCP port, default 8080
+	WebUser     string `json:"web_user"`     // login, default "admin"
+	WebPassword string `json:"web_password"` // required when WebRemote is set
+	WebRemote   bool   `json:"web_remote"`   // reachable from other computers, not only from this one
 }
+
+// DefaultWebPort and DefaultWebUser are used when the settings leave them empty.
+const (
+	DefaultWebPort = 8080
+	DefaultWebUser = "admin"
+)
 
 // Defaults returns the default settings.
 func Defaults() Settings {
@@ -59,6 +72,8 @@ func Defaults() Settings {
 		StartMinimized:   true,
 		Notifications:    true,
 		AcceptPMHPairing: true,
+		WebPort:          DefaultWebPort,
+		WebUser:          DefaultWebUser,
 		GUID:             pairing.NewGUID().String(),
 	}
 }
@@ -118,6 +133,12 @@ func Load() (Settings, error) {
 		s.GUID = pairing.NewGUID().String()
 		_ = Save(s)
 	}
+	if s.WebPort == 0 {
+		s.WebPort = DefaultWebPort
+	}
+	if s.WebUser == "" {
+		s.WebUser = DefaultWebUser
+	}
 	return s, nil
 }
 
@@ -128,7 +149,7 @@ func Save(s Settings) error {
 		return err
 	}
 	tmp := path() + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+	if err := os.WriteFile(tmp, b, 0o600); err != nil { // 0600: may hold the web password
 		return err
 	}
 	return os.Rename(tmp, path())
