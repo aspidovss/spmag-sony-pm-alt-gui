@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.3.0
+
+- **Browser interface** (`wpr watch -web ADDR`, also in Docker): status, speed and
+  time left, file list, download / stop / re-check / finish, settings, log, USB
+  pairing, 10 languages, phone-friendly. Password (HTTP Basic) is required on
+  network addresses; local-only mode checks the Host header; changing requests
+  are protected against cross-site use.
+- **USB pairing on Linux** through `/dev/sg*` (`wpr usb`, `wpr pair`, web page).
+  Ported from the Windows code and covered by unit tests; not yet tested with a
+  real camera.
+- **`.deb` packages** for amd64 and arm64 (systemd service, `spmag-wpr` user,
+  `/etc/default/spmag-wpr`).
+- Docker: `SPMAG_WEB` / `SPMAG_WEB_PASSWORD` environment variables;
+  docker-compose requires a password.
+- `wpr watch -lang` chooses the language of the web interface and status texts.
+
 ## v0.2.0
 
 - Linux: `wpr watch` service mode (automatic receive, finish, wait again),

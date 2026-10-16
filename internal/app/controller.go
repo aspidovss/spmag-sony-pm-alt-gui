@@ -533,3 +533,51 @@ func ProgressText(p *transfer.Progress) string {
 	}
 	return t
 }
+
+var statusKeys = [...]string{"st.missing", "st.received", "st.queued", "st.downloading", "st.failed", "st.excluded"}
+
+// StatusText is the file status in the interface language.
+func StatusText(s transfer.Status) string { return i18n.T(statusKeys[s]) }
+
+// KindText is the file type in the interface language (JPEG and RAW stay as they are).
+func KindText(k transfer.Kind) string {
+	switch k {
+	case transfer.KindVideo:
+		return i18n.T("kind.video")
+	case transfer.KindOther:
+		return i18n.T("kind.other")
+	}
+	return k.String()
+}
+
+// Title is the one-line status shown at the top of a UI.
+func (s Snapshot) Title() string {
+	t := s.State.Text()
+	if s.Paused && s.State == StateWaiting {
+		t = i18n.T("status.paused")
+	}
+	if s.Camera != "" {
+		t += " — " + s.Camera
+	}
+	return t
+}
+
+// Detail is the second status line (message, camera address, pairing source).
+func (s Snapshot) Detail() string {
+	d := s.Message
+	if s.IP != "" && s.State != StateWaiting {
+		d += "\n" + i18n.T("detail.address", s.IP)
+		if s.GUIDSource != "" {
+			d += i18n.T("detail.pairing", s.GUIDSource)
+		}
+	}
+	return d
+}
+
+// CountsText summarises the file list; empty if the camera is not connected.
+func (s Snapshot) CountsText() string {
+	if s.Counts.Total == 0 {
+		return ""
+	}
+	return i18n.T("counts", s.Counts.Total, s.Counts.Received, s.Counts.Missing, HumanBytes(s.Counts.MissingBytes), s.Counts.Failed, s.Counts.Excluded)
+}

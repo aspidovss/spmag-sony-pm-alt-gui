@@ -29,7 +29,8 @@ jobs:
             cp -r "dist/linux-$arch" "$lin"
             tar -czf "$lin.tar.gz" "$lin"
           done
-          sha256sum SPMAG-*.zip SPMAG-*.tar.gz > SHA256SUMS.txt
+          cp dist/spmag-wpr_*.deb .
+          sha256sum SPMAG-*.zip SPMAG-*.tar.gz spmag-wpr_*.deb > SHA256SUMS.txt
           # release notes: only this version's section of the changelog
           awk -v v="${v#v}" '/^## /{p = ($2 == v || $2 == "v" v)} p' CHANGELOG.md > release-notes.md
           test -s release-notes.md || cp CHANGELOG.md release-notes.md
@@ -38,5 +39,6 @@ jobs:
           files: |
             SPMAG-*.zip
             SPMAG-*.tar.gz
+            spmag-wpr_*.deb
             SHA256SUMS.txt
           body_path: release-notes.md

@@ -1,0 +1,15 @@
+# Options of the spmag-wpr service ("wpr watch"). After editing:
+#   sudo systemctl restart spmag-wpr
+#
+# Save photos to a folder the "spmag-wpr" user may write to, e.g.
+#   sudo mkdir -p /srv/photos/camera && sudo chown spmag-wpr: /srv/photos/camera
+WPR_OPTS="-dest /var/lib/spmag-wpr/photos"
+
+# Browser interface. Without a password it must stay on 127.0.0.1:
+#   WPR_OPTS="-dest /srv/photos/camera -web 127.0.0.1:8080"
+# On the network (reachable from other computers) set a password:
+#   WPR_OPTS="-dest /srv/photos/camera -web :8080"
+#   SPMAG_WEB_PASSWORD="choose-a-long-password"
+#
+# Other options: -types jpeg,raw,video,other  -pattern '{yyyy}/{yyyy}-{MM}-{dd}'
+#                -guid ID  -name NAME  -no-finish  -lang ru   (see: wpr watch -h)

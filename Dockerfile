@@ -2,9 +2,14 @@
 #
 #   docker build -t spmag-wpr .
 #   docker run -d --name spmag-wpr --network host --restart unless-stopped \
+#     -e SPMAG_WEB=:8080 -e SPMAG_WEB_PASSWORD='choose-a-long-password' \
 #     -v /srv/photos/camera:/photos -v spmag-wpr-config:/config spmag-wpr
 #
 # --network host is required: the camera is found by SSDP multicast.
+# SPMAG_WEB turns on the browser interface (http://HOST:8080); on a network
+# address it refuses to start without SPMAG_WEB_PASSWORD. Leave both unset for a
+# headless receiver. USB pairing from the web page needs the camera's SCSI
+# device: add  --device /dev/sg1  (see "wpr usb" on the host).
 FROM golang:1.22-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./

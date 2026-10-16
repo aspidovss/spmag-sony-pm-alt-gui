@@ -136,5 +136,13 @@ func init() {
 		"progress.file":        "파일 %d / %d",
 		"progress.speedEta":    " · %s/초 · 약 %s 남음",
 		"progress.measuring":   " · 속도 측정 중…",
+		"web.selectAll":        "모두 선택",
+		"web.noFiles":          "표시할 파일이 없습니다.",
+		"web.saved":            "설정이 저장되었습니다.",
+		"web.connLost":         "프로그램과의 연결이 끊어졌습니다. 다시 시도하는 중…",
+		"web.resume":           "자동 가져오기 다시 시작",
+		"web.drives":           "발견된 USB 드라이브:",
+		"web.pairNA":           "이 시스템에서는 USB 페어링을 사용할 수 없습니다.",
+		"web.logout":           "로그인은 브라우저(HTTP 인증)에서 처리됩니다.",
 	})
 }

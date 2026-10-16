@@ -12,8 +12,8 @@ import (
 
 // Language is an interface language offered in the settings.
 type Language struct {
-	Code string // "en", "ru", ...
-	Name string // shown in its own language
+	Code string `json:"code"` // "en", "ru", ...
+	Name string `json:"name"` // shown in its own language
 }
 
 // Languages lists the supported interface languages. English comes first and
@@ -94,4 +94,19 @@ func T(key string, args ...any) string {
 		return s
 	}
 	return fmt.Sprintf(s, args...)
+}
+
+// Strings returns every text of the active language (English fills any gap).
+// The web interface downloads it to translate itself.
+func Strings() map[string]string {
+	mu.RLock()
+	defer mu.RUnlock()
+	out := make(map[string]string, len(tables["en"]))
+	for k, v := range tables["en"] {
+		out[k] = v
+	}
+	for k, v := range tables[cur] {
+		out[k] = v
+	}
+	return out
 }

@@ -1,14 +1,15 @@
 // wpr is the command-line companion of SPMAG Wifi Photo Receiver. It is useful for
 // troubleshooting a camera and for scripting:
 //
-//	wpr watch               run in the background: receive photos whenever the
-//	                        camera starts "Send to Computer" (Linux service, Docker)
+//	wpr watch [-web ADDR]   run in the background: receive photos whenever the
+//	                        camera starts "Send to Computer" (Linux service, Docker);
+//	                        -web serves a browser interface
 //	wpr discover            listen for cameras in "Send to Computer" mode
 //	wpr list   [-ip IP]     connect and show which files are received/missing
 //	wpr pull   [-ip IP]     download missing files, then tell the camera "done"
 //	wpr guid                show this PC's IDs (own and PlayMemories-style)
-//	wpr usb                 list USB drives (Windows) for pairing
-//	wpr pair   -drive PATH  write this PC's ID into the camera over USB (admin)
+//	wpr usb                 list USB drives (Windows, Linux) for pairing
+//	wpr pair   [-drive P]   write this PC's ID into the camera over USB (admin/root)
 //	wpr capture [-ip IP]    record the camera's protocol answers as test fixtures
 //	wpr fakecam             run a simulated camera on this PC for testing
 //
@@ -32,11 +33,16 @@ import (
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/capture"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/config"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/fakecam"
+	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/i18n"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/pairing"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/ssdp"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/store"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/transfer"
+	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/web"
 )
+
+// version is set at build time (-ldflags "-X main.version=...").
+var version = "dev"
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage: wpr <command> [flags]
@@ -47,8 +53,8 @@ commands:
   list       connect and show received / missing files
   pull       download missing files
   guid       show this PC's IDs
-  usb        list USB drives (Windows)
-  pair       write this PC's ID into the camera over USB (Windows, admin)
+  usb        list USB drives (Windows, Linux)
+  pair       write this PC's ID into the camera over USB (needs admin / root)
   capture    record the camera's answers as test fixtures (serial/MAC masked)
   fakecam    run a simulated camera for testing
 
@@ -247,7 +253,7 @@ func cmdUSB() error {
 
 func cmdPair(args []string) error {
 	fs := flag.NewFlagSet("pair", flag.ExitOnError)
-	drive := fs.String("drive", "", `drive path, e.g. \\.\PhysicalDrive2 (default: the only Sony drive)`)
+	drive := fs.String("drive", "", `drive path, e.g. \\.\PhysicalDrive2 or /dev/sg1 (default: the only Sony drive)`)
 	_ = fs.Parse(args)
 	cfg, err := config.Load()
 	if err != nil {
@@ -405,14 +411,28 @@ func cmdWatch(ctx context.Context, args []string) error {
 	pmh := fs.Bool("accept-pmh", cfg.AcceptPMHPairing, "also try PlayMemories-style IDs built from this computer's MAC addresses")
 	noFinish := fs.Bool("no-finish", false, "do not tell the camera the transfer is finished (camera stays on)")
 	save := fs.Bool("save", false, "save these options to the settings file")
+	webAddr := fs.String("web", os.Getenv("SPMAG_WEB"), "serve the web interface on this address, e.g. 127.0.0.1:8080 or :8080 (env SPMAG_WEB)")
+	webPass := fs.String("web-password", os.Getenv("SPMAG_WEB_PASSWORD"), "password for the web interface (env SPMAG_WEB_PASSWORD); required unless the address is loopback")
+	webOpen := fs.Bool("web-no-auth", false, "allow the web interface on a network address without a password (not recommended)")
+	lang := fs.String("lang", "", "language of the web interface and status texts: en, zh, es, fr, de, pt, ru, ja, ko, it (default: settings, then system)")
 	_ = fs.Parse(args)
 
 	cfg.DestDir = *dest
 	cfg.FolderPattern = *pattern
 	cfg.HostName = *name
 	cfg.AcceptPMHPairing = *pmh
-	cfg.AutoDownload = true
-	cfg.FinishAfterAuto = !*noFinish
+	if *webAddr == "" {
+		cfg.AutoDownload = true // headless service: always receive automatically
+	}
+	if *noFinish {
+		cfg.FinishAfterAuto = false
+	} else if *webAddr == "" {
+		cfg.FinishAfterAuto = true
+	}
+	if *lang != "" {
+		cfg.Language = *lang
+	}
+	i18n.Set(cfg.Language)
 	if _, err := pairing.ParseGUID(*guid); err != nil {
 		return fmt.Errorf("-guid: %w", err)
 	}
@@ -437,8 +457,9 @@ func cmdWatch(ctx context.Context, args []string) error {
 	fmt.Printf("  save to:   %s\n  types:     %s\n  this ID:   %s\n  settings:  %s\n",
 		cfg.DestDir, typesString(cfg), cfg.GUID, config.Dir())
 
+	var logs web.LogBuffer
 	c := app.New(cfg, db)
-	c.OnLog = func(line string) { fmt.Println(line) }
+	c.OnLog = func(line string) { fmt.Println(line); logs.Append(line) }
 	c.OnNotify = func(title, text string) { fmt.Printf("%s %s: %s\n", time.Now().Format("15:04:05"), title, text) }
 	var mu sync.Mutex
 	lastMsg, lastProg := "", time.Time{}
@@ -459,6 +480,23 @@ func cmdWatch(ctx context.Context, args []string) error {
 		}
 	}
 	c.Start(ctx)
+	if *webAddr != "" {
+		loop := web.IsLoopbackAddr(*webAddr)
+		if !loop && *webPass == "" && !*webOpen {
+			return fmt.Errorf("the web interface on %s would be open to the network: set -web-password (or SPMAG_WEB_PASSWORD), use a 127.0.0.1 address, or pass -web-no-auth", *webAddr)
+		}
+		h := web.Handler(web.Options{Ctl: c, Logs: &logs, Version: version, Password: *webPass, LoopbackOnly: loop && *webPass == ""})
+		go func() {
+			if err := web.Serve(ctx, *webAddr, h); err != nil {
+				fmt.Fprintln(os.Stderr, "web interface:", err)
+			}
+		}()
+		auth := "password protected"
+		if *webPass == "" {
+			auth = "NO password"
+		}
+		fmt.Printf("  web:       http://%s (%s)\n", displayAddr(*webAddr), auth)
+	}
 	<-ctx.Done()
 	fmt.Println("stopping…")
 	select {
@@ -466,6 +504,13 @@ func cmdWatch(ctx context.Context, args []string) error {
 	case <-time.After(10 * time.Second):
 	}
 	return nil
+}
+
+func displayAddr(a string) string {
+	if strings.HasPrefix(a, ":") {
+		return "localhost" + a
+	}
+	return a
 }
 
 func typesString(cfg config.Settings) string {

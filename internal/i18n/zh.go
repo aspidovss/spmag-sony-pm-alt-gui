@@ -136,5 +136,13 @@ func init() {
 		"progress.file":        "文件 %d / %d",
 		"progress.speedEta":    " · %s/秒 · 约剩 %s",
 		"progress.measuring":   " · 正在测速…",
+		"web.selectAll":        "全选",
+		"web.noFiles":          "没有可显示的文件。",
+		"web.saved":            "设置已保存。",
+		"web.connLost":         "与程序的连接已断开，正在重试…",
+		"web.resume":           "恢复自动导入",
+		"web.drives":           "找到的 USB 驱动器：",
+		"web.pairNA":           "此系统不支持 USB 配对。",
+		"web.logout":           "登录由浏览器处理（HTTP 认证）。",
 	})
 }

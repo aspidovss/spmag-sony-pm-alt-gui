@@ -136,5 +136,13 @@ func init() {
 		"progress.file":        "ファイル %d / %d",
 		"progress.speedEta":    " · %s/秒 · 残り約 %s",
 		"progress.measuring":   " · 速度を測定中…",
+		"web.selectAll":        "すべて選択",
+		"web.noFiles":          "表示するファイルがありません。",
+		"web.saved":            "設定を保存しました。",
+		"web.connLost":         "プログラムとの接続が切れました。再試行中…",
+		"web.resume":           "自動インポートを再開",
+		"web.drives":           "見つかった USB ドライブ:",
+		"web.pairNA":           "このシステムではUSBペアリングを利用できません。",
+		"web.logout":           "サインインはブラウザー（HTTP認証）で行われます。",
 	})
 }

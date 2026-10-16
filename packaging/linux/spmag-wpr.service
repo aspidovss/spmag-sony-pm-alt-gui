@@ -6,8 +6,14 @@
 #   sudo systemctl enable --now spmag-wpr
 #   journalctl -u spmag-wpr -f
 #
-# The camera must be paired with the ID this service uses: copy the "guid"
-# from your Windows settings.json into -guid, or pair once over USB.
+# The camera must be paired with the ID this service uses: pair once over USB
+# ("sudo wpr pair" as the same user, or the Pair button in the web interface)
+# or copy the "guid" from your Windows settings.json into -guid.
+#
+# Browser interface: append "-web 127.0.0.1:8080" to ExecStart. For access from
+# other computers use "-web :8080" and set
+#   Environment=SPMAG_WEB_PASSWORD=choose-a-long-password
+# (put it into "systemctl edit spmag-wpr" so it is not world-readable).
 [Unit]
 Description=SPMAG Wifi Photo Receiver (Sony Send to Computer)
 Documentation=https://github.com/aspidovss/spmag-sony-pm-alt-gui

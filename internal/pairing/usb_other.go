@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build !windows && !linux
 
 package pairing
 
@@ -18,7 +18,7 @@ func (d Drive) IsSony() bool { return false }
 // ErrNeedsAdmin is returned when raw disk access is denied.
 var ErrNeedsAdmin = errors.New("administrator rights are required")
 
-var errUnsupported = errors.New("USB pairing is only implemented on Windows")
+var errUnsupported = errors.New("USB pairing is only implemented on Windows and Linux")
 
 // ListUSBDrives is not implemented on this OS.
 func ListUSBDrives() ([]Drive, error) { return nil, errUnsupported }
