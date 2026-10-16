@@ -1,6 +1,8 @@
 // wpr is the command-line companion of SPMAG Wifi Photo Receiver. It is useful for
 // troubleshooting a camera and for scripting:
 //
+//	wpr watch               run in the background: receive photos whenever the
+//	                        camera starts "Send to Computer" (Linux service, Docker)
 //	wpr discover            listen for cameras in "Send to Computer" mode
 //	wpr list   [-ip IP]     connect and show which files are received/missing
 //	wpr pull   [-ip IP]     download missing files, then tell the camera "done"
@@ -22,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -39,6 +42,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `usage: wpr <command> [flags]
 
 commands:
+  watch      keep running and receive photos whenever the camera sends (service mode)
   discover   listen for cameras (Ctrl+C to stop)
   list       connect and show received / missing files
   pull       download missing files
@@ -61,10 +65,12 @@ func main() {
 		usage()
 	}
 	cmd, args := os.Args[1], os.Args[2:]
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	var err error
 	switch cmd {
+	case "watch":
+		err = cmdWatch(ctx, args)
 	case "discover":
 		err = cmdDiscover(ctx, args)
 	case "list":
@@ -275,12 +281,26 @@ func cmdPair(args []string) error {
 func cmdFakecam(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("fakecam", flag.ExitOnError)
 	pairs := fs.Int("pairs", 12, "number of JPEG+ARW pairs on the simulated card")
-	model := fs.String("model", "ILCE-77M2", "model name")
+	model := fs.String("model", "ILCA-77M2", "model name")
 	bind := fs.String("ip", "", "local IP to announce (default: the adapter's IP)")
 	strict := fs.Bool("strict", false, "only accept this PC's own ID (to test pairing errors)")
+	rate := fs.Float64("rate", 0, "simulated Wi-Fi speed in MB/s (0 = unlimited; the a77 II does about 3)")
+	jpegMB := fs.Float64("jpeg", 0, "JPEG size in MB (0 = tiny test files)")
+	rawMB := fs.Float64("raw", 0, "RAW size in MB (0 = tiny test files)")
 	_ = fs.Parse(args)
 	cam := fakecam.New(*model, *pairs)
 	cam.Logf = logf
+	cam.Rate = int64(*rate * 1e6)
+	if *jpegMB > 0 || *rawMB > 0 {
+		j, r := int(*jpegMB*1e6), int(*rawMB*1e6)
+		if j == 0 {
+			j = 20000
+		}
+		if r == 0 {
+			r = 60000
+		}
+		cam.SetSizes(j, r)
+	}
 	if *strict {
 		cfg, err := config.Load()
 		if err != nil {
@@ -367,6 +387,122 @@ func cmdCapture(ctx context.Context, args []string) error {
 		fmt.Println("\nWARNING: -raw output contains the camera serial number and MAC address.")
 	} else {
 		fmt.Println("\nSerial number, camera MAC and IP are masked. Zip this folder and send it.")
+	}
+	return nil
+}
+
+func cmdWatch(ctx context.Context, args []string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	fs := flag.NewFlagSet("watch", flag.ExitOnError)
+	dest := fs.String("dest", cfg.DestDir, "folder for received files")
+	pattern := fs.String("pattern", cfg.FolderPattern, "subfolder pattern: {yyyy} {yy} {MM} {dd} {camera}; empty = none")
+	types := fs.String("types", typesString(cfg), "file types to download: jpeg,raw,video,other")
+	guid := fs.String("guid", cfg.GUID, "PTP/IP ID of this computer (use the same ID as your paired Windows PC)")
+	name := fs.String("name", cfg.HostName, "name shown on the camera (default: host name)")
+	pmh := fs.Bool("accept-pmh", cfg.AcceptPMHPairing, "also try PlayMemories-style IDs built from this computer's MAC addresses")
+	noFinish := fs.Bool("no-finish", false, "do not tell the camera the transfer is finished (camera stays on)")
+	save := fs.Bool("save", false, "save these options to the settings file")
+	_ = fs.Parse(args)
+
+	cfg.DestDir = *dest
+	cfg.FolderPattern = *pattern
+	cfg.HostName = *name
+	cfg.AcceptPMHPairing = *pmh
+	cfg.AutoDownload = true
+	cfg.FinishAfterAuto = !*noFinish
+	if _, err := pairing.ParseGUID(*guid); err != nil {
+		return fmt.Errorf("-guid: %w", err)
+	}
+	cfg.GUID = *guid
+	if err := applyTypes(&cfg, *types); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(cfg.DestDir, 0o755); err != nil {
+		return err
+	}
+	if *save {
+		if err := config.Save(cfg); err != nil {
+			return err
+		}
+	}
+	db, err := store.Open(filepath.Join(config.Dir(), "received.json"))
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s %s (wpr watch)\n", config.AppName, config.RepoURL)
+	fmt.Printf("  save to:   %s\n  types:     %s\n  this ID:   %s\n  settings:  %s\n",
+		cfg.DestDir, typesString(cfg), cfg.GUID, config.Dir())
+
+	c := app.New(cfg, db)
+	c.OnLog = func(line string) { fmt.Println(line) }
+	c.OnNotify = func(title, text string) { fmt.Printf("%s %s: %s\n", time.Now().Format("15:04:05"), title, text) }
+	var mu sync.Mutex
+	lastMsg, lastProg := "", time.Time{}
+	c.OnChange = func() {
+		s := c.Snapshot()
+		mu.Lock()
+		defer mu.Unlock()
+		if s.State == app.StateDownloading && s.Progress != nil {
+			if time.Since(lastProg) >= 10*time.Second {
+				lastProg = time.Now()
+				fmt.Printf("%s %s\n", time.Now().Format("15:04:05"), app.ProgressText(s.Progress))
+			}
+			return
+		}
+		if s.Message != lastMsg && !strings.HasPrefix(s.Message, "Reading the file list from the camera… ") {
+			lastMsg = s.Message
+			fmt.Printf("%s %s\n", time.Now().Format("15:04:05"), s.Message)
+		}
+	}
+	c.Start(ctx)
+	<-ctx.Done()
+	fmt.Println("stopping…")
+	select {
+	case <-c.Stopped():
+	case <-time.After(10 * time.Second):
+	}
+	return nil
+}
+
+func typesString(cfg config.Settings) string {
+	var t []string
+	if cfg.IncludeJPEG {
+		t = append(t, "jpeg")
+	}
+	if cfg.IncludeRAW {
+		t = append(t, "raw")
+	}
+	if cfg.IncludeVideo {
+		t = append(t, "video")
+	}
+	if cfg.IncludeOther {
+		t = append(t, "other")
+	}
+	return strings.Join(t, ",")
+}
+
+func applyTypes(cfg *config.Settings, s string) error {
+	cfg.IncludeJPEG, cfg.IncludeRAW, cfg.IncludeVideo, cfg.IncludeOther = false, false, false, false
+	for _, t := range strings.Split(s, ",") {
+		switch strings.ToLower(strings.TrimSpace(t)) {
+		case "":
+		case "jpeg", "jpg", "heif":
+			cfg.IncludeJPEG = true
+		case "raw", "arw":
+			cfg.IncludeRAW = true
+		case "video":
+			cfg.IncludeVideo = true
+		case "other":
+			cfg.IncludeOther = true
+		case "all":
+			cfg.IncludeJPEG, cfg.IncludeRAW, cfg.IncludeVideo, cfg.IncludeOther = true, true, true, true
+		default:
+			return fmt.Errorf("-types: unknown type %q (use jpeg,raw,video,other,all)", t)
+		}
 	}
 	return nil
 }

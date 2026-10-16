@@ -132,8 +132,14 @@ func AddFirewallRule(ruleName string, oldNames ...string) error {
 // SingleInstance returns false if another instance holds the named mutex.
 func SingleInstance(name string) bool {
 	p, _ := windows.UTF16PtrFromString("Local\\" + name)
-	_, err := windows.CreateMutex(nil, false, p)
-	return err != windows.ERROR_ALREADY_EXISTS
+	h, err := windows.CreateMutex(nil, false, p)
+	if err == windows.ERROR_ALREADY_EXISTS {
+		if h != 0 {
+			_ = windows.CloseHandle(h) // do not keep the other instance's mutex alive
+		}
+		return false
+	}
+	return true
 }
 
 var (

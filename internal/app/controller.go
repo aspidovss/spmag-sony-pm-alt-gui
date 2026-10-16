@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/config"
+	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/i18n"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/ssdp"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/store"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/transfer"
@@ -28,6 +29,11 @@ const (
 
 func (s State) String() string {
 	return [...]string{"Waiting for camera", "Connecting", "Reading file list", "Connected", "Downloading"}[s]
+}
+
+// Text is the state name in the interface language.
+func (s State) Text() string {
+	return i18n.T([...]string{"state.waiting", "state.connecting", "state.scanning", "state.ready", "state.downloading"}[s])
 }
 
 // Counts summarises the file list.
@@ -91,10 +97,10 @@ type Controller struct {
 // New creates a controller.
 func New(cfg config.Settings, db *store.DB) *Controller {
 	return &Controller{cfg: cfg, db: db, cmds: make(chan command, 32), cooldown: map[string]time.Time{}, stopped: make(chan struct{}),
-		snap: Snapshot{State: StateWaiting, Message: waitingText}}
+		snap: Snapshot{State: StateWaiting, Message: waitingText()}}
 }
 
-const waitingText = "Waiting for camera… On the camera choose MENU → Wireless → Send to Computer."
+func waitingText() string { return i18n.T("ctl.waiting") }
 
 func (c *Controller) logf(format string, args ...any) {
 	line := time.Now().Format("15:04:05 ") + fmt.Sprintf(format, args...)
@@ -217,7 +223,7 @@ func (c *Controller) worker(ctx context.Context) {
 			return
 		case <-done:
 			c.logf("Camera disconnected")
-			c.dropSession("Camera disconnected. " + waitingText)
+			c.dropSession(i18n.T("ctl.disconnected") + " " + waitingText())
 		case cmd := <-c.cmds:
 			c.handle(ctx, cmd)
 		}
@@ -294,7 +300,7 @@ func (c *Controller) handle(ctx context.Context, cmd command) {
 		c.sess.End(cmd.finish)
 		c.cooldown[c.sess.IP] = time.Now().Add(90 * time.Second)
 		c.sess = nil
-		c.dropSession(waitingText)
+		c.dropSession(waitingText())
 	}
 }
 
@@ -302,7 +308,7 @@ func (c *Controller) connect(ctx context.Context, ip string, auto bool) {
 	cfg := c.Settings()
 	c.update(func(s *Snapshot) {
 		s.State = StateConnecting
-		s.Message = "Connecting to camera at " + ip + "…"
+		s.Message = i18n.T("ctl.connecting", ip)
 		s.IP = ip
 	})
 	cctx, cancel := context.WithTimeout(ctx, 40*time.Second)
@@ -314,11 +320,11 @@ func (c *Controller) connect(ctx context.Context, ip string, auto bool) {
 		if errors.Is(err, transfer.ErrNoPairing) {
 			wait = 30 * time.Second
 			if c.OnNotify != nil {
-				c.OnNotify("Camera not paired", "The camera refused this PC. Pair it via USB in Settings.")
+				c.OnNotify(i18n.T("notify.notPairedT"), i18n.T("notify.notPairedX"))
 			}
 		}
 		c.cooldown[ip] = time.Now().Add(wait)
-		c.dropSession("Connection failed: " + err.Error())
+		c.dropSession(i18n.T("ctl.connFailed", err.Error()))
 		return
 	}
 	c.sess = sess
@@ -337,8 +343,8 @@ func (c *Controller) connect(ctx context.Context, ip string, auto bool) {
 				c.sess.End(true)
 				c.cooldown[ip] = time.Now().Add(90 * time.Second)
 				c.sess = nil
-				c.dropSession(fmt.Sprintf("Last transfer at %s: %d new file(s) downloaded; %d of %d camera files are on this PC. %s",
-					time.Now().Format("15:04"), res.Downloaded, snap.Counts.Received, snap.Counts.Total, waitingText))
+				c.dropSession(i18n.T("ctl.lastTransfer",
+					time.Now().Format("15:04"), res.Downloaded, snap.Counts.Received, snap.Counts.Total) + " " + waitingText())
 			}
 		}
 	}
@@ -347,19 +353,19 @@ func (c *Controller) connect(ctx context.Context, ip string, auto bool) {
 func (c *Controller) scan(ctx context.Context) bool {
 	c.update(func(s *Snapshot) {
 		s.State = StateScanning
-		s.Message = "Reading the file list from the camera…"
+		s.Message = i18n.T("ctl.reading")
 		s.Progress = nil
 	})
 	sctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	err := c.sess.Scan(sctx, func(n int) {
 		if n%25 == 0 {
-			c.update(func(s *Snapshot) { s.Message = fmt.Sprintf("Reading the file list from the camera… %d files", n) })
+			c.update(func(s *Snapshot) { s.Message = i18n.T("ctl.readingN", n) })
 		}
 	})
 	cancel()
 	if err != nil {
 		c.logf("Scan failed: %v", err)
-		c.dropSession("Reading the file list failed: " + err.Error())
+		c.dropSession(i18n.T("ctl.readFailed", err.Error()))
 		return false
 	}
 	c.reconcile()
@@ -404,10 +410,10 @@ func (c *Controller) publishItems(st State, msg string) {
 	items := c.sess.Items()
 	k := count(items)
 	if msg == "" {
-		msg = fmt.Sprintf("Connected to %s. %d files on camera: %d received, %d missing (%s), %d excluded by filter",
+		msg = i18n.T("ctl.connected",
 			c.sess.CameraName, k.Total, k.Received, k.Missing, HumanBytes(k.MissingBytes), k.Excluded)
 		if k.Failed > 0 {
-			msg += fmt.Sprintf(", %d failed", k.Failed)
+			msg += i18n.T("ctl.failedSuffix", k.Failed)
 		}
 		msg += "."
 	}
@@ -433,7 +439,7 @@ func (c *Controller) download(ctx context.Context, keys []string) transfer.Resul
 		c.cancelDL = nil
 		c.mu.Unlock()
 	}()
-	c.publishItems(StateDownloading, "Downloading…")
+	c.publishItems(StateDownloading, i18n.T("ctl.downloading"))
 	meter := &transfer.RateMeter{Window: 10 * time.Second}
 	meter.Add(time.Now(), 0)
 	res, err := c.sess.Download(dctx, keys, func(p transfer.Progress) {
@@ -451,28 +457,28 @@ func (c *Controller) download(ctx context.Context, keys []string) transfer.Resul
 			s.Progress = &pp
 			s.Items = items
 			s.Counts = count(items)
-			s.Message = fmt.Sprintf("Downloading %d of %d: %s", p.Index, p.Count, p.Item.Name)
+			s.Message = i18n.T("ctl.downloadingN", p.Index, p.Count, p.Item.Name)
 		})
 	})
 	rate := ""
 	if res.Duration > time.Second && res.Bytes > 0 {
-		rate = fmt.Sprintf(" at %s/s", HumanBytes(uint64(float64(res.Bytes)/res.Duration.Seconds())))
+		rate = i18n.T("ctl.summaryRate", HumanBytes(uint64(float64(res.Bytes)/res.Duration.Seconds())))
 	}
-	summary := fmt.Sprintf("Downloaded %d file(s), %s in %s%s", res.Downloaded, HumanBytes(uint64(res.Bytes)), res.Duration.Round(time.Second), rate)
+	summary := i18n.T("ctl.summary", res.Downloaded, HumanBytes(uint64(res.Bytes)), res.Duration.Round(time.Second)) + rate
 	if res.Failed > 0 {
-		summary += fmt.Sprintf("; %d failed", res.Failed)
+		summary += i18n.T("ctl.summaryFailed", res.Failed)
 	}
 	if errors.Is(err, context.Canceled) {
-		summary += " (cancelled)"
+		summary += i18n.T("ctl.cancelled")
 	}
 	c.logf("%s", summary)
 	if c.OnNotify != nil && (res.Downloaded > 0 || res.Failed > 0) {
-		c.OnNotify("Transfer finished", summary)
+		c.OnNotify(i18n.T("notify.finished"), summary)
 	}
 	// the connection may have dropped during the transfer
 	select {
 	case <-c.sess.Client.Done():
-		c.dropSession("Camera disconnected. " + summary)
+		c.dropSession(i18n.T("ctl.disconnected") + " " + summary)
 		return res
 	default:
 	}
@@ -502,28 +508,28 @@ func HumanDuration(d time.Duration) string {
 	sec := int(d.Round(time.Second).Seconds())
 	switch {
 	case sec < 60:
-		return fmt.Sprintf("%d s", sec)
+		return i18n.T("dur.sec", sec)
 	case sec < 3600:
 		m, s := sec/60, sec%60
 		if m >= 10 {
-			return fmt.Sprintf("%d min", (sec+30)/60)
+			return i18n.T("dur.min", (sec+30)/60)
 		}
-		return fmt.Sprintf("%d min %02d s", m, s)
+		return i18n.T("dur.minSec", m, s)
 	}
-	return fmt.Sprintf("%d h %02d min", sec/3600, (sec%3600)/60)
+	return i18n.T("dur.hourMin", sec/3600, (sec%3600)/60)
 }
 
 // ProgressText describes a running transfer in one line.
 func ProgressText(p *transfer.Progress) string {
-	t := fmt.Sprintf("File %d of %d", p.Index, p.Count)
+	t := i18n.T("progress.file", p.Index, p.Count)
 	if p.Total > 0 {
 		t += fmt.Sprintf(" (%d%%)", p.Done*100/p.Total)
 	}
 	t += fmt.Sprintf(" · %s of %s", HumanBytes(uint64(p.BytesAll)), HumanBytes(uint64(p.QueueBytes)))
 	if p.Speed > 0 {
-		t += fmt.Sprintf(" · %s/s · about %s left", HumanBytes(uint64(p.Speed)), HumanDuration(p.ETA))
+		t += i18n.T("progress.speedEta", HumanBytes(uint64(p.Speed)), HumanDuration(p.ETA))
 	} else {
-		t += " · measuring speed…"
+		t += i18n.T("progress.measuring")
 	}
 	return t
 }

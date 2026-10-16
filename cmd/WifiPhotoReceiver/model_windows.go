@@ -4,17 +4,57 @@ package main
 
 import (
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/lxn/walk"
 
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/app"
+	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/i18n"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/transfer"
 )
 
 // Filter values for the "Show" combo box.
-var filterNames = []string{"All files", "Missing", "Received", "Failed", "Excluded by filter"}
+func filterNames() []string {
+	return []string{i18n.T("filter.all"), i18n.T("filter.missing"), i18n.T("filter.received"), i18n.T("filter.failed"), i18n.T("filter.excluded")}
+}
+
+var statusKeys = [...]string{"st.missing", "st.received", "st.queued", "st.downloading", "st.failed", "st.excluded"}
+
+// kindText translates the file type names (JPEG and RAW stay as they are).
+func kindText(k transfer.Kind) string {
+	switch k {
+	case transfer.KindVideo:
+		return i18n.T("kind.video")
+	case transfer.KindOther:
+		return i18n.T("kind.other")
+	}
+	return k.String()
+}
+
+// languageNames returns the combo box entries: automatic, then each language.
+func languageNames() []string {
+	out := []string{i18n.T("set.langAuto")}
+	for _, l := range i18n.Languages {
+		out = append(out, l.Name)
+	}
+	return out
+}
+
+func languageCode(idx int) string {
+	if idx <= 0 || idx > len(i18n.Languages) {
+		return ""
+	}
+	return i18n.Languages[idx-1].Code
+}
+
+func languageIndex(code string) int {
+	for i, l := range i18n.Languages {
+		if l.Code == code {
+			return i + 1
+		}
+	}
+	return 0
+}
 
 func passesFilter(f int, it *transfer.Item) bool {
 	switch f {
@@ -54,7 +94,7 @@ func (m *fileModel) Value(row, col int) interface{} {
 	case 0:
 		return it.Name
 	case 1:
-		return it.Kind.String()
+		return kindText(it.Kind)
 	case 2:
 		if it.Captured.IsZero() {
 			return ""
@@ -64,7 +104,7 @@ func (m *fileModel) Value(row, col int) interface{} {
 		return app.HumanBytes(it.Size)
 	case 4:
 		if it.Status == transfer.StatusDownloading && it.Size > 0 {
-			return "Downloading " + strconv.Itoa(int(it.Done*100/int64(it.Size))) + "%"
+			return i18n.T("st.downloadingPct", int(it.Done*100/int64(it.Size)))
 		}
 		return it.Status.String()
 	case 5:

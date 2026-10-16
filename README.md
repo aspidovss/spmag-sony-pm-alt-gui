@@ -12,6 +12,10 @@ online services.
 > request and under the direction of the maintainer. The maintainer tested
 > the program with a real camera. Review the code before relying on it.
 
+![SPMAG Wifi Photo Receiver downloading photos](docs/screenshot.png)
+
+![Settings tab](docs/screenshot-settings.png)
+
 ## Features
 
 * Detects the camera automatically when you start *Send to Computer* on it.
@@ -26,7 +30,9 @@ online services.
 * System tray icon, start with Windows, notifications.
 * Built-in pairing over USB. It also accepts an existing PlayMemories Home pairing.
 * A single portable `.exe` without installer or runtime (Windows 10/11, x64).
-* Command-line tool `wpr.exe` for troubleshooting and scripting.
+* **Linux**: headless service `wpr watch` (systemd or Docker) for home servers,
+  NAS and Raspberry Pi (amd64 and arm64).
+* Command-line tool `wpr` for troubleshooting and scripting.
 
 ### Tested cameras
 
@@ -34,9 +40,21 @@ online services.
 |---|---|---|---|---|
 | Sony α77 II (ILCA-77M2) | 2.0 | ✅ | ✅ | ✅ |
 
-Other Sony cameras with *Send to Computer* use the same protocol and should
-work. Please report results, or add a capture of your camera (see
-[testdata](testdata/README.md)).
+Other Sony cameras with *Send to Computer* use the same protocol and may
+work. See the [theoretical compatibility list](docs/COMPATIBILITY.md) (only the
+row above is verified) and please report results, or add a capture of your
+camera (see [testdata](testdata/README.md)).
+
+## Languages
+
+The interface (windows, menus, tray, dialogs, status texts) is available in
+English, 简体中文, Español, Français, Deutsch, Português (Brasil), Русский,
+日本語, 한국어 and Italiano. By default the Windows display language is used;
+change it in **Settings → Language** (the program restarts to apply it). Log
+files and the command-line tool stay in English. The translations were produced
+with AI assistance and have not been reviewed by native speakers — corrections
+are welcome as pull requests (`internal/i18n/<code>.go`; a test checks that
+every language has every text).
 
 ## Quick start
 
@@ -59,6 +77,48 @@ work. Please report results, or add a capture of your camera (see
 Turn off *"Download missing files automatically"* in Settings if you prefer to
 look at the list first. Then use **Download missing** or **Download selected**.
 Close PlayMemories Home if it is still installed, because it may grab the camera first.
+
+## Linux (service / Docker)
+
+`wpr watch` runs without a GUI. It waits for the camera, downloads the missing
+files, tells the camera it is done and waits for the next time. The workflow,
+the received-files database and the folder layout are the same as on Windows.
+
+**Pairing.** USB pairing is not yet available on Linux. The camera accepts
+any computer that presents the ID it was paired with, so pair once on Windows
+and use the same ID on Linux. Copy `"guid"` from
+`%APPDATA%\SPMAG Wifi Photo Receiver\settings.json` (or run `wpr guid` on
+Windows) and pass it as `-guid`.
+
+**Binary + systemd:** download `SPMAG-wpr-…-linux-amd64.tar.gz` (or `arm64`
+for Raspberry Pi) from Releases, then:
+
+```sh
+tar xzf SPMAG-wpr-v*-linux-amd64.tar.gz && cd SPMAG-wpr-*/
+./wpr watch -dest ~/Pictures/camera -guid 00:00:00:00:00:00:00:00:ff:ff:xx:xx:xx:xx:xx:xx -save
+# as a service (edit User= and -dest in the unit first):
+sudo install -m 755 wpr /usr/local/bin/wpr
+sudo install -m 644 spmag-wpr.service /etc/systemd/system/
+sudo systemctl enable --now spmag-wpr
+journalctl -u spmag-wpr -f
+```
+
+**Docker** (host networking is required for SSDP discovery):
+
+```sh
+docker build -t spmag-wpr .
+docker run -d --name spmag-wpr --network host --restart unless-stopped \
+  -v /srv/photos/camera:/photos -v spmag-wpr-config:/config \
+  spmag-wpr -guid 00:00:00:00:00:00:00:00:ff:ff:xx:xx:xx:xx:xx:xx -save
+```
+
+or `docker compose up -d` with the included `docker-compose.yml`.
+
+Useful `wpr watch` options: `-dest DIR`, `-types jpeg,raw,video,other`,
+`-pattern '{yyyy}/{yyyy}-{MM}-{dd}'`, `-guid ID`, `-name NAME`, `-no-finish`,
+`-save` (store the options in `~/.config/spmag-wifi-photo-receiver/settings.json`).
+Allow inbound UDP 1900 from the LAN if a firewall is active
+(`sudo ufw allow from 192.168.0.0/16 to any port 1900 proto udp`).
 
 ## How it works
 
@@ -94,7 +154,7 @@ PTP/IP, TCP 15740 ── Init Command Request with this PC's 16-byte GUID
 
 ```
 cmd/WifiPhotoReceiver/   Windows GUI (tray, file list, settings) — lxn/walk
-cmd/wpr/                 command-line tool
+cmd/wpr/                 command-line tool and Linux service (wpr watch)
 internal/ptpip/          PTP/IP client: packets, transactions, datasets, Sony ops
 internal/ssdp/           camera discovery (SSDP listener, M-SEARCH, description)
 internal/pairing/        GUIDs, PlayMemories-style GUIDs, USB pairing (Windows)
@@ -108,6 +168,8 @@ internal/winutil/        autostart, elevation, firewall rule, single instance
 internal/icon/           application icon drawn in code
 tools/genres/            generates icon + manifest for the .exe
 testdata/<model>/        real camera answers (serial/MAC/IP masked)
+packaging/linux/         systemd unit
+Dockerfile, docker-compose.yml   container for wpr watch
 ```
 
 ## Building
@@ -140,6 +202,7 @@ the zipped executables.
 ## Command-line tool
 
 ```
+wpr watch [options]       run as a service: receive whenever the camera sends
 wpr discover              list cameras announcing "Send to Computer"
 wpr list  [-ip IP] [-all] connect and show missing (or all) files
 wpr pull  [-ip IP]        download missing files, then finish
@@ -147,7 +210,22 @@ wpr guid                  show this PC's own and PlayMemories-style IDs
 wpr usb                   list USB drives (find the camera for pairing)
 wpr pair  [-drive PATH]   pair via USB (run as administrator)
 wpr capture [-ip IP]      record the camera's answers into testdata/<model>/
-wpr fakecam [-pairs N]    run a simulated camera on this PC
+wpr fakecam [-pairs N] [-jpeg MB -raw MB -rate MB/s]
+                          run a simulated camera on this PC
+```
+
+### Demo without a camera
+
+The screenshot above was made this way. The simulated camera sends files at a
+realistic Wi-Fi speed, and a separate data folder keeps the demo apart from
+your real settings and photos:
+
+```powershell
+# console 1: simulated α77 II with 40 JPEG+RAW pairs at ~3 MB/s
+.\wpr.exe fakecam -pairs 40 -jpeg 6 -raw 24 -rate 3
+# console 2: the app with its own settings, database and photo folder
+$env:SPMAG_CONFIG_DIR = "$env:TEMP\spmag-demo"
+.\SPMAG-WifiPhotoReceiver.exe
 ```
 
 ## Files and settings
@@ -190,8 +268,8 @@ parameters, data layouts) were taken from the sources above.
 
 ## Roadmap
 
-* **Linux version** (next): background service / `wpr watch` for home servers
-  and Docker, USB pairing through `/dev/sg*`, optional tray UI.
+* **Linux**: ✅ service `wpr watch`, systemd, Docker, amd64/arm64 builds.
+  Next: USB pairing through `/dev/sg*`, then a tray UI for desktops and a `.deb` package.
 * More tested cameras: add yours with `wpr capture`.
 
 ## License

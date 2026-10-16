@@ -1,0 +1,6 @@
+dist
+build
+*.exe
+*.syso
+go.local.*
+.git
