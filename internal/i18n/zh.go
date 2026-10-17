@@ -72,6 +72,8 @@ func init() {
 		"set.startWin":         "随 Windows 启动（在托盘中）",
 		"set.startMin":         "随 Windows 启动时保持在托盘中",
 		"set.notify":           "显示通知",
+		"set.closeExits":       "关闭按钮退出程序（而不是隐藏到托盘）",
+		"set.minTray":          "最小化按钮隐藏到托盘",
 		"set.pairing":          "相机配对",
 		"set.guid":             "本机 ID (GUID)：",
 		"set.newID":            "新 ID",

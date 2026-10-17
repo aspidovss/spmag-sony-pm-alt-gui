@@ -72,6 +72,8 @@ func init() {
 		"set.startWin":         "Windows と同時に起動する（トレイ内）",
 		"set.startMin":         "Windows と同時に起動したときはトレイに常駐する",
 		"set.notify":           "通知を表示する",
+		"set.closeExits":       "閉じるボタンでプログラムを終了する（トレイに隠さない）",
+		"set.minTray":          "最小化ボタンでトレイに隠す",
 		"set.pairing":          "カメラのペアリング",
 		"set.guid":             "このPCのID (GUID):",
 		"set.newID":            "新しいID",

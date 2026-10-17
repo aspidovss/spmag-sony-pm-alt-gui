@@ -72,6 +72,8 @@ func init() {
 		"set.startWin":         "Démarrer avec Windows (dans la zone de notification)",
 		"set.startMin":         "Au démarrage avec Windows, rester dans la zone de notification",
 		"set.notify":           "Afficher les notifications",
+		"set.closeExits":       "Le bouton fermer quitte le programme (au lieu de le réduire dans la zone de notification)",
+		"set.minTray":          "Le bouton réduire masque dans la zone de notification",
 		"set.pairing":          "Appairage de l’appareil",
 		"set.guid":             "ID de ce PC (GUID) :",
 		"set.newID":            "Nouvel ID",

@@ -17,6 +17,7 @@ import (
 
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
+	"github.com/lxn/win"
 
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/acl"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/app"
@@ -121,6 +122,7 @@ type gui struct {
 	cbJPEG, cbRAW, cbVideo, cbOther        *walk.CheckBox
 	cbAuto, cbFinish, cbMatch, cbStartWin  *walk.CheckBox
 	cbStartMin, cbNotify, cbPMH            *walk.CheckBox
+	cbCloseExits, cbMinTray                *walk.CheckBox
 	aclTE                                  *walk.TextEdit
 	// web interface (settings page)
 	cbWeb, cbWebRemote   *walk.CheckBox
@@ -135,7 +137,6 @@ type gui struct {
 
 	pauseAction *walk.Action
 	exiting     bool
-	hiddenOnce  bool
 
 	refreshMu      sync.Mutex
 	refreshPending bool
@@ -182,16 +183,25 @@ func (g *gui) run(startHidden bool) {
 	g.setupTray(appIcon)
 
 	g.mw.Closing().Attach(func(canceled *bool, reason walk.CloseReason) {
-		// Only the user's close button hides to the tray; Exit, logoff and
-		// shutdown really close the program.
-		if g.exiting || reason != walk.CloseReasonUser {
+		// Hide to the tray instead of quitting, unless the user asked for the
+		// close button to quit, the program is exiting on purpose (tray menu,
+		// restart) or there is no tray icon to get the window back from.
+		// The reason is not checked: this walk version always reports
+		// CloseReasonUnknown for the window's close button. Logoff and shutdown
+		// end the process without a close request.
+		if g.exiting || g.ni == nil || g.ctl == nil || g.ctl.Settings().CloseExits {
 			return
 		}
 		*canceled = true
-		g.mw.Hide()
-		if !g.hiddenOnce && g.ni != nil {
-			g.hiddenOnce = true
-			_ = g.ni.ShowInfo(config.AppName, i18n.T("tray.hidden"))
+		g.hideToTray()
+	})
+	// The minimize button can hide the window to the tray too.
+	g.mw.SizeChanged().Attach(func() {
+		if g.exiting || g.ni == nil || g.ctl == nil || !g.ctl.Settings().MinimizeToTray {
+			return
+		}
+		if win.IsIconic(g.mw.Handle()) {
+			g.hideToTray()
 		}
 	})
 
@@ -374,6 +384,8 @@ func (g *gui) settingsPage() TabPage {
 							CheckBox{AssignTo: &g.cbStartWin, Text: i18n.T("set.startWin")},
 							CheckBox{AssignTo: &g.cbStartMin, Text: i18n.T("set.startMin")},
 							CheckBox{AssignTo: &g.cbNotify, Text: i18n.T("set.notify")},
+							CheckBox{AssignTo: &g.cbCloseExits, Text: i18n.T("set.closeExits")},
+							CheckBox{AssignTo: &g.cbMinTray, Text: i18n.T("set.minTray")},
 						},
 					},
 					GroupBox{
@@ -542,8 +554,18 @@ func (g *gui) setupTray(ic *walk.Icon) {
 	_ = ni.SetVisible(true)
 }
 
+// hideToTray hides the window and tells the user, every time, where the
+// program went.
+func (g *gui) hideToTray() {
+	g.mw.Hide()
+	if g.ni != nil {
+		_ = g.ni.ShowInfo(config.AppName, i18n.T("tray.hidden"))
+	}
+}
+
 func (g *gui) showWindow() {
 	g.mw.Show()
+	win.ShowWindow(g.mw.Handle(), win.SW_RESTORE)
 	g.mw.SetFocus()
 	winutil.ActivateWindow(config.AppName)
 }
@@ -749,6 +771,8 @@ func (g *gui) loadSettingsIntoForm() {
 	g.cbStartWin.SetChecked(c.StartWithWindows)
 	g.cbStartMin.SetChecked(c.StartMinimized)
 	g.cbNotify.SetChecked(c.Notifications)
+	g.cbCloseExits.SetChecked(c.CloseExits)
+	g.cbMinTray.SetChecked(c.MinimizeToTray)
 	g.cbPMH.SetChecked(c.AcceptPMHPairing)
 	_ = g.guidLE.SetText(c.GUID)
 	_ = g.hostLE.SetText(c.HostName)
@@ -778,6 +802,8 @@ func (g *gui) formSettings() config.Settings {
 	c.StartWithWindows = g.cbStartWin.Checked()
 	c.StartMinimized = g.cbStartMin.Checked()
 	c.Notifications = g.cbNotify.Checked()
+	c.CloseExits = g.cbCloseExits.Checked()
+	c.MinimizeToTray = g.cbMinTray.Checked()
 	c.AcceptPMHPairing = g.cbPMH.Checked()
 	c.GUID = g.guidLE.Text()
 	c.HostName = strings.TrimSpace(g.hostLE.Text())

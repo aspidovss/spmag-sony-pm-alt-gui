@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.4.2
+
+- **Fixed (Windows): the close button quit the program instead of hiding it to
+  the tray.** The window library reports the same "unknown" reason for every
+  close, and the program only hid itself for a "user" reason. It now hides
+  whenever it is not exiting on purpose.
+- **New:** "Close button exits the program" option (off by default) and
+  "Minimize button hides to the tray" option (on by default) in Settings.
+- The "still running in the tray" balloon is shown every time the window is
+  hidden, not only the first time. If the tray icon could not be created, the
+  window is never hidden.
+- Start with Windows and "stay in the tray" (`--tray`) work as before.
+
 ## v0.4.1
 
 Security release. Please update, especially if the program runs on a network you

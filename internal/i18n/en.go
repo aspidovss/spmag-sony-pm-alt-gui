@@ -74,6 +74,8 @@ func init() {
 		"set.startWin":         "Start with Windows (in the tray)",
 		"set.startMin":         "When started with Windows, stay in the tray",
 		"set.notify":           "Show notifications",
+		"set.closeExits":       "Close button exits the program (instead of hiding to the tray)",
+		"set.minTray":          "Minimize button hides to the tray",
 		"set.pairing":          "Camera pairing",
 		"set.guid":             "This PC's ID (GUID):",
 		"set.newID":            "New ID",
