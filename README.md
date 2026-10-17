@@ -30,6 +30,8 @@ online services.
 * System tray icon, start with Windows, notifications.
 * Built-in pairing over USB. It also accepts an existing PlayMemories Home pairing.
 * A single portable `.exe` without installer or runtime (Windows 10/11, x64).
+* **Allowed cameras list**: restrict the program to your own cameras (IP,
+  network, serial number, model). Other devices on the network are ignored.
 * **Browser interface** on Windows and Linux: switch it on in the settings and
   choose the port, login and password. Control the program from a phone or
   another computer.
@@ -104,6 +106,33 @@ first time the interface is opened to the network.
 Options given on the command line (`-web`, `-web-password`, `SPMAG_WEB`) win over
 the settings; the page then shows the web options as read-only.
 
+## Allowed cameras (access list)
+
+A camera is just a device on your Wi-Fi that announces itself, so by default
+the program talks to any Sony camera it finds. To limit it to your own, write
+the list in **Settings → Allowed cameras** (or on the web page, or
+`wpr watch -allow ...`), one entry per line:
+
+```
+192.168.1.50            one camera by IP address
+192.168.1.0/24          every address of a network
+serial:3012345          a camera by the serial number it reports
+model:ILCA-77M2         a camera model
+```
+
+* Entries of the same kind are alternatives; every kind that is present must
+  match. `192.168.1.0/24` plus `serial:A` and `serial:B` means: on that network
+  **and** one of those two cameras.
+* The address is checked **before** anything is sent to the device; the serial
+  number and model right after connecting, before any file is listed.
+* An empty list allows any camera on the local network. An invalid entry makes
+  the program refuse everything, so a typo can never widen the list.
+* An address typed by hand (*Connect to IP…*, `wpr list -ip`) must be a local
+  one (private, link-local, loopback) unless you list it explicitly.
+* Ignored cameras are mentioned once in the log.
+
+See [SECURITY.md](SECURITY.md) for what the program trusts and what was checked.
+
 ## Linux (AppImage, service, browser interface, Docker)
 
 **AppImage** (any desktop distribution, no installation): download
@@ -155,6 +184,8 @@ folder, so it is protected:
   on a trusted LAN, or put a TLS reverse proxy (Caddy, nginx) in front of it.
 * Changing requests need a custom header and a same-origin request, so another
   web page cannot drive it from your browser.
+* After 5 wrong passwords an address is blocked for a minute; there are request
+  timeouts and header, body and connection limits.
 * `-web-no-auth` switches the password requirement off. Do not use it unless
   the port is closed to everyone else (firewall, VPN).
 
@@ -210,7 +241,8 @@ web page add `--device /dev/sg1` (the camera's device from `wpr usb`).
 
 Useful `wpr watch` options: `-dest DIR`, `-types jpeg,raw,video,other`,
 `-pattern '{yyyy}/{yyyy}-{MM}-{dd}'`, `-guid ID`, `-name NAME`, `-no-finish`,
-`-lang ru`, `-web ADDR`, `-web-user NAME`, `-web-password PW`, `-ui`, `-save` (store the options in
+`-lang ru`, `-web ADDR`, `-web-user NAME`, `-web-password PW`, `-ui`,
+`-allow 192.168.1.0/24,serial:3012345`, `-save` (store the options in
 `~/.config/spmag-wifi-photo-receiver/settings.json`). Allow inbound UDP 1900
 from the LAN if a firewall is active
 (`sudo ufw allow from 192.168.0.0/16 to any port 1900 proto udp`) and the web
@@ -257,6 +289,7 @@ internal/pairing/        GUIDs, PlayMemories-style GUIDs, USB pairing (Windows, 
 internal/transfer/       session: scan, reconcile, download, folder patterns
 internal/store/          database of received files (JSON)
 internal/app/            workflow controller used by the GUI and the web interface
+internal/acl/            allowed cameras list (IP, network, serial, model)
 internal/web/            browser interface: JSON API, embedded page (static/), server manager
 internal/i18n/           interface translations (10 languages)
 internal/config/         settings (%APPDATA%\SPMAG Wifi Photo Receiver\settings.json)

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/acl"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/config"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/i18n"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/ssdp"
@@ -158,6 +159,12 @@ func (c *Controller) Start(ctx context.Context) {
 	c.logf("Started. Listening for cameras on the local network.")
 }
 
+// CheckAddr reports whether a camera at ip may be used under the current
+// access list (nil = allowed).
+func (c *Controller) CheckAddr(ip string) error {
+	return acl.Check(c.Settings().AllowedCameras, ip, true)
+}
+
 // ConnectIP connects to a camera by address (bypasses discovery).
 func (c *Controller) ConnectIP(ip string) { c.cmds <- command{kind: cmdConnect, ip: ip} }
 
@@ -192,7 +199,13 @@ func (c *Controller) CancelDownload() {
 }
 
 // SetSettings applies new settings.
-func (c *Controller) SetSettings(cfg config.Settings) { c.cmds <- command{kind: cmdSettings, cfg: cfg} }
+func (c *Controller) SetSettings(cfg config.Settings) {
+	// Visible to Settings() at once; the worker then updates the open session.
+	c.mu.Lock()
+	c.cfg = cfg
+	c.mu.Unlock()
+	c.cmds <- command{kind: cmdSettings, cfg: cfg}
+}
 
 // SetPaused stops reacting to camera announcements.
 func (c *Controller) SetPaused(p bool) {
@@ -267,6 +280,12 @@ func (c *Controller) handle(ctx context.Context, cmd command) {
 		if until, ok := c.cooldown[cmd.cam.IP]; ok && time.Now().Before(until) {
 			return
 		}
+		if err := acl.Check(c.Settings().AllowedCameras, cmd.cam.IP, false); err != nil {
+			// not one of ours: say so once, then ignore it for a while
+			c.logf("Ignoring %s at %s: %v", cmd.cam.FriendlyName, cmd.cam.IP, err)
+			c.cooldown[cmd.cam.IP] = time.Now().Add(10 * time.Minute)
+			return
+		}
 		c.logf("Found %s (%s) at %s", cmd.cam.FriendlyName, cmd.cam.Model, cmd.cam.IP)
 		c.connect(ctx, cmd.cam.IP, true)
 	case cmdConnect:
@@ -312,12 +331,18 @@ func (c *Controller) connect(ctx context.Context, ip string, auto bool) {
 		s.IP = ip
 	})
 	cctx, cancel := context.WithTimeout(ctx, 40*time.Second)
-	sess, err := transfer.Connect(cctx, ip, cfg, c.db, c.logf)
+	connectFn := transfer.Connect
+	if auto {
+		connectFn = transfer.ConnectDiscovered // the address came from an SSDP announcement
+	}
+	sess, err := connectFn(cctx, ip, cfg, c.db, c.logf)
 	cancel()
 	if err != nil {
 		c.logf("Connection failed: %v", err)
 		wait := 10 * time.Second
-		if errors.Is(err, transfer.ErrNoPairing) {
+		if errors.Is(err, acl.ErrNotAllowed) {
+			wait = 5 * time.Minute
+		} else if errors.Is(err, transfer.ErrNoPairing) {
 			wait = 30 * time.Second
 			if c.OnNotify != nil {
 				c.OnNotify(i18n.T("notify.notPairedT"), i18n.T("notify.notPairedX"))

@@ -18,6 +18,7 @@ import (
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
 
+	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/acl"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/app"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/config"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/i18n"
@@ -120,6 +121,7 @@ type gui struct {
 	cbJPEG, cbRAW, cbVideo, cbOther        *walk.CheckBox
 	cbAuto, cbFinish, cbMatch, cbStartWin  *walk.CheckBox
 	cbStartMin, cbNotify, cbPMH            *walk.CheckBox
+	aclTE                                  *walk.TextEdit
 	// web interface (settings page)
 	cbWeb, cbWebRemote   *walk.CheckBox
 	webPortNE            *walk.NumberEdit
@@ -395,6 +397,14 @@ func (g *gui) settingsPage() TabPage {
 								},
 							},
 							TextLabel{ColumnSpan: 3, Text: i18n.T("set.pairHelp")},
+						},
+					},
+					GroupBox{
+						Title:  i18n.T("set.acl"),
+						Layout: VBox{},
+						Children: []Widget{
+							TextEdit{AssignTo: &g.aclTE, VScroll: true, MinSize: Size{Height: 64}, MaxSize: Size{Height: 96}},
+							TextLabel{Text: i18n.T("set.aclHelp")},
 						},
 					},
 					GroupBox{
@@ -743,6 +753,7 @@ func (g *gui) loadSettingsIntoForm() {
 	_ = g.guidLE.SetText(c.GUID)
 	_ = g.hostLE.SetText(c.HostName)
 	_ = g.langCB.SetCurrentIndex(languageIndex(c.Language))
+	_ = g.aclTE.SetText(strings.Join(c.AllowedCameras, "\r\n"))
 	a := web.AccessFrom(c).Normalize()
 	g.cbWeb.SetChecked(a.Enabled)
 	_ = g.webPortNE.SetValue(float64(a.Port))
@@ -771,6 +782,7 @@ func (g *gui) formSettings() config.Settings {
 	c.GUID = g.guidLE.Text()
 	c.HostName = strings.TrimSpace(g.hostLE.Text())
 	c.Language = languageCode(g.langCB.CurrentIndex())
+	c.AllowedCameras = acl.Split(g.aclTE.Text())
 	web.Access{
 		Enabled:  g.cbWeb.Checked(),
 		Port:     int(g.webPortNE.Value()),
@@ -790,6 +802,10 @@ func (g *gui) saveSettings() {
 	}
 	if err := os.MkdirAll(c.DestDir, 0o755); err != nil {
 		walk.MsgBox(g.mw, config.AppName, i18n.T("dlg.cannotCreate", err.Error()), walk.MsgBoxIconError)
+		return
+	}
+	if _, err := acl.Parse(c.AllowedCameras); err != nil {
+		walk.MsgBox(g.mw, config.AppName, err.Error(), walk.MsgBoxIconWarning)
 		return
 	}
 	access := web.AccessFrom(c)

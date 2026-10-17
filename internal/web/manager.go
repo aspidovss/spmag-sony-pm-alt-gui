@@ -165,7 +165,15 @@ func (m *Manager) Start(l Listen, allowOpen bool) error {
 	o.User, o.Password = l.User, l.Password
 	o.LoopbackOnly = loop && l.Password == ""
 	o.Manager = m
-	srv := &http.Server{Handler: Handler(o), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
+	srv := &http.Server{
+		Handler:           Handler(o),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    16 << 10,
+	}
+	ln = newLimitListener(ln, 128)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)

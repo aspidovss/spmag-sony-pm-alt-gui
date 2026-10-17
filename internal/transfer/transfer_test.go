@@ -2,8 +2,10 @@ package transfer
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func TestExpandPattern(t *testing.T) {
@@ -54,5 +56,54 @@ func TestRateMeter(t *testing.T) {
 	}
 	if r := m.Rate(); r < 0.9e6 || r > 1.2e6 {
 		t.Fatalf("rate after slowdown %v", r)
+	}
+}
+
+func TestSafeFileName(t *testing.T) {
+	cases := map[string]string{
+		"DSC00001.JPG":        "DSC00001.JPG",
+		"../x.txt":            "x.txt",
+		`..\..\x.txt`:         "x.txt",
+		"a/b/../c.txt":        "c.txt",
+		`C:\Windows\evil.exe`: "evil.exe",
+		"/etc/passwd":         "passwd",
+		"..":                  "",
+		".":                   "",
+		"":                    "",
+		"   ":                 "",
+		"name.":               "name",
+		"nul\x00byte.txt":     "nul_byte.txt",
+		"CON":                 "_CON",
+		"con.txt":             "_con.txt",
+		"aux.tar.gz":          "_aux.tar.gz",
+		"COM1.txt":            "_COM1.txt",
+		"COM10.txt":           "COM10.txt",
+		"a<b>c:d|e?f*g.jpg":   "a_b_c_d_e_f_g.jpg",
+		"Ünïcode-日本語.JPG":     "Ünïcode-日本語.JPG",
+	}
+	for in, want := range cases {
+		if got := SafeFileName(in); got != want {
+			t.Errorf("SafeFileName(%q) = %q, want %q", in, got, want)
+		}
+	}
+	long := SafeFileName(strings.Repeat("あ", 300) + ".ARW")
+	if len(long) > 200 || !strings.HasSuffix(long, ".ARW") || !utf8.ValidString(long) {
+		t.Errorf("long name: %d bytes %q", len(long), long)
+	}
+}
+
+func TestWithin(t *testing.T) {
+	root := filepath.Join(string(filepath.Separator), "data", "photos")
+	for p, want := range map[string]bool{
+		filepath.Join(root, "a.jpg"):              true,
+		filepath.Join(root, "x", "y", "a.jpg"):    true,
+		root:                                      false,
+		filepath.Join(root, "..", "a.jpg"):        false,
+		filepath.Join(root, "..", "photos2", "a"): false,
+		filepath.Join(string(filepath.Separator), "etc", "passwd"): false,
+	} {
+		if got := within(root, p); got != want {
+			t.Errorf("within(%q) = %v, want %v", p, got, want)
+		}
 	}
 }
