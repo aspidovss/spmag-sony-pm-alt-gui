@@ -1,5 +1,14 @@
 # SPMAG Wifi Photo Receiver
 
+[![Go](https://img.shields.io/github/go-mod/go-version/aspidovss/spmag-sony-pm-alt-gui?logo=go&logoColor=white&color=00ADD8)](https://go.dev/)
+[![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white)](https://github.com/aspidovss/spmag-sony-pm-alt-gui/releases/latest)
+[![Linux](https://img.shields.io/badge/Linux-AppImage%20%C2%B7%20deb%20%C2%B7%20Docker-FCC624?logo=linux&logoColor=black)](https://github.com/aspidovss/spmag-sony-pm-alt-gui/releases/latest)
+[![Web server](https://img.shields.io/badge/Web%20server-built--in%20interface-4c9be8?logo=googlechrome&logoColor=white)](SECURITY.md)
+[![ARM](https://img.shields.io/badge/ARM-arm64-0091BD?logo=arm&logoColor=white)](https://github.com/aspidovss/spmag-sony-pm-alt-gui/releases/latest)
+[![License MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Telemetry none](https://img.shields.io/badge/telemetry-none-brightgreen)](SECURITY.md)
+[![No internet](https://img.shields.io/badge/internet-no%20data%20sent-brightgreen)](SECURITY.md)
+
 **Repository:** <https://github.com/aspidovss/spmag-sony-pm-alt-gui> · © 2026 AspidovSS · MIT License
 
 A small open-source Windows program that receives photos from Sony cameras over

@@ -80,3 +80,14 @@ no directory listing or path traversal for the embedded page.
   can still imitate it. Use the list together with a network you control
   (separate Wi-Fi for the camera, router access control).
 * Files are saved as the camera describes them; their content is not scanned.
+
+## Privacy: no telemetry, nothing sent to the internet
+
+The program has no telemetry, no update check, no analytics and no online
+service. Its only network activity is local: SSDP discovery on the local network,
+the connection to the camera (PTP/IP, port 15740), the optional web interface
+you turn on yourself, and (for the camera's description) one plain `GET` to the
+address the camera announces, without redirects. Photos, settings and the list of
+received files stay on your computer. You can check this in the source
+(`internal/ssdp`, `internal/ptpip`, `internal/web`) or with a firewall: the
+program needs no outbound access to the internet.
