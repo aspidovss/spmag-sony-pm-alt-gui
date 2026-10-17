@@ -165,3 +165,24 @@ func TestRecordsAreKeptPerCamera(t *testing.T) {
 		t.Fatalf("camera B after migration: %v", b2.Status)
 	}
 }
+
+// The serial number and the model come from the camera (or from whoever poses
+// as one) and end up in a folder name: they must never leave the save folder.
+func TestExpandPatternHostileCameraText(t *testing.T) {
+	tm := time.Date(2026, 3, 7, 10, 0, 0, 0, time.Local)
+	hostile := []string{"..", `..\..\x`, "../../x", "a/../../b", `C:\Windows`, "/etc", "\x00..", ".", "...", " .. "}
+	for _, h := range hostile {
+		for _, pat := range []string{"{serial}", "{camera}", `{camera}-{serial}\{dd}`, `x\{serial}\{camera}`} {
+			for _, got := range []string{ExpandPattern(pat, tm, h, h), ExpandPattern(pat, tm, "ILCE", h)} {
+				if filepath.IsAbs(got) || got == ".." || strings.HasPrefix(got, ".."+string(filepath.Separator)) ||
+					strings.Contains(got, string(filepath.Separator)+".."+string(filepath.Separator)) ||
+					strings.HasSuffix(got, string(filepath.Separator)+"..") || strings.ContainsRune(got, 0) {
+					t.Errorf("pattern %q with %q -> %q escapes", pat, h, got)
+				}
+				if !within(`/dest`, filepath.Join(`/dest`, got, "f.ARW")) {
+					t.Errorf("pattern %q with %q -> %q leaves the destination", pat, h, got)
+				}
+			}
+		}
+	}
+}

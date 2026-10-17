@@ -17,6 +17,21 @@ RestartSec=10
 NoNewPrivileges=true
 ProtectSystem=full
 PrivateTmp=true
+# Further hardening. The receiver only needs the network (IPv4/IPv6 and
+# netlink for the interface list), its state directory and the photo folder.
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
 
 [Install]
 WantedBy=multi-user.target
