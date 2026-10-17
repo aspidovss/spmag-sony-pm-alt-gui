@@ -92,11 +92,31 @@ func ParseDescription(r io.Reader) (*Camera, error) {
 		return nil, err
 	}
 	return &Camera{
-		FriendlyName: d.Device.FriendlyName,
-		Manufacturer: d.Device.Manufacturer,
-		Model:        d.Device.ModelName,
-		UDN:          d.Device.UDN,
+		FriendlyName: CleanText(d.Device.FriendlyName),
+		Manufacturer: CleanText(d.Device.Manufacturer),
+		Model:        CleanText(d.Device.ModelName),
+		UDN:          CleanText(d.Device.UDN),
 	}, nil
+}
+
+// CleanText makes text that came from a device on the network safe to show
+// and to write to logs: control characters (line breaks included) become
+// spaces and the length is capped at 100 characters.
+func CleanText(s string) string { return CleanTextN(s, 100) }
+
+// CleanTextN is CleanText with a different length limit (in characters).
+func CleanTextN(s string, max int) string {
+	s = strings.Map(func(r rune) rune {
+		if r < 32 || r == 0x7f || (r >= 0x80 && r < 0xa0) || r == 0x2028 || r == 0x2029 {
+			return ' '
+		}
+		return r
+	}, s)
+	s = strings.TrimSpace(s)
+	if r := []rune(s); len(r) > max {
+		s = string(r[:max])
+	}
+	return s
 }
 
 // Fetch downloads and parses the device description.
@@ -123,7 +143,9 @@ func FetchRaw(ctx context.Context, location string) ([]byte, error) {
 	}
 	// The camera's tiny web server is on the LAN: never use a proxy.
 	tr := &http.Transport{Proxy: nil, DisableKeepAlives: true}
-	resp, err := (&http.Client{Transport: tr}).Do(req)
+	// A device must not be able to send us to another host: no redirects.
+	client := &http.Client{Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}

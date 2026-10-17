@@ -42,6 +42,11 @@ type Settings struct {
 	ManualIP         string `json:"manual_ip"`
 	Language         string `json:"language"` // "" = system language, else en, ru, de, ...
 
+	// AllowedCameras limits which cameras are used (see package acl): IP
+	// addresses, networks (CIDR), "serial:NUMBER", "model:NAME". Empty = any
+	// camera on the local network.
+	AllowedCameras []string `json:"allowed_cameras,omitempty"`
+
 	// Web interface (browser access). Off by default.
 	WebEnabled  bool   `json:"web_enabled"`
 	WebPort     int    `json:"web_port"`     // TCP port, default 8080

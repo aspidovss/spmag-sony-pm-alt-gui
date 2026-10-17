@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.4.1
+
+Security release. Please update, especially if the program runs on a network you
+do not fully control. Details: [SECURITY.md](SECURITY.md).
+
+- **Fixed: a device on the network posing as a camera could write files outside
+  the save folder** through the file names it reports (`../../x`, `..\..\x`,
+  absolute paths). Names are now reduced to a plain, safe file name and the
+  final path is checked.
+- **New: allowed cameras list** (Settings, web page, `wpr watch -allow`): IP
+  addresses, networks (`192.168.1.0/24`), `serial:NUMBER`, `model:NAME`. Other
+  devices are ignored and never receive anything. A list with a typo refuses
+  everything. Without a list, an IP typed by hand must be a local address.
+- Web interface: after 5 wrong passwords an address is blocked for a minute;
+  request timeouts, header and connection limits; log lines capped; more
+  isolation headers.
+- Text from the network is stripped of control characters before it reaches
+  logs and screen; SSDP descriptions are fetched without redirects; a large
+  PTP/IP packet no longer reserves memory before its data arrives.
+- Fixed a race where settings saved twice quickly could be read back stale.
+- CI runs `govulncheck` (informational).
+
 ## v0.4.0
 
 - **AppImage** for Linux (amd64 and arm64): one file, no installation. Started

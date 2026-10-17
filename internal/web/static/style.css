@@ -29,12 +29,12 @@ main { margin: 0 16px; background: var(--panel); border: 1px solid var(--line); 
 .progtext { flex: 2 1 280px; color: var(--muted); }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; }
 .grow { flex: 1; }
-button, select, input[type=text], input[type=password], input[type=number] { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; }
+button, select, textarea, input[type=text], input[type=password], input[type=number] { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; }
 button { cursor: pointer; }
 button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: .45; cursor: default; }
 button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-input[type=text], input[type=password], input[type=number] { width: 100%; }
+input[type=text], input[type=password], input[type=number], textarea { width: 100%; }
 #ip { width: 11em; }
 .counts { color: var(--muted); }
 .tablewrap { overflow: auto; max-height: 62vh; border: 1px solid var(--line); border-radius: 6px; }
@@ -64,3 +64,5 @@ legend { padding: 0 6px; font-weight: 600; }
 footer { margin: 12px 16px 20px; color: var(--muted); font-size: 12px; }
 a { color: var(--accent); }
 @media (max-width: 640px) { .row { grid-template-columns: 1fr; } main { padding: 10px; } .grow { display: none; } }
+
+textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; resize: vertical; min-height: 4.5em; }

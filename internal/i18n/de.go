@@ -162,5 +162,13 @@ func init() {
 		"web.clearPass":        "Passwort entfernen",
 		"web.quitConfirm":      "Programm beenden? Fotos werden erst wieder empfangen, wenn es neu gestartet wird.",
 		"web.quitDone":         "Das Programm wurde beendet. Sie können diesen Tab schließen.",
+		"acl.badEntry":         "Ungültiger Eintrag in der Liste erlaubter Kameras: %s (IP-Adresse, Netzwerk wie 192.168.1.0/24, serial:NUMMER oder model:NAME).",
+		"acl.needIP":           "Geben Sie die IP-Adresse der Kamera ein (z. B. 192.168.1.50).",
+		"acl.notListed":        "Die Adresse %s steht nicht in der Liste erlaubter Kameras.",
+		"acl.notLocal":         "%s ist keine Adresse im lokalen Netzwerk. Tragen Sie sie in die Liste erlaubter Kameras ein, wenn Sie sie wirklich nutzen möchten.",
+		"acl.model":            "Das Kameramodell „%s“ steht nicht in der Liste erlaubter Kameras.",
+		"acl.serial":           "Die Seriennummer „%s“ steht nicht in der Liste erlaubter Kameras.",
+		"set.acl":              "Erlaubte Kameras",
+		"set.aclHelp":          "Es werden nur diese Kameras verwendet. Ein Eintrag pro Zeile: IP-Adresse (192.168.1.50), Netzwerk (192.168.1.0/24), serial:NUMMER oder model:NAME. Leer = jede Kamera im lokalen Netzwerk. Jede vorhandene Eintragsart muss passen, z. B. Netzwerk und Seriennummer.",
 	})
 }

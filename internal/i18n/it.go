@@ -162,5 +162,13 @@ func init() {
 		"web.clearPass":        "Rimuovi la password",
 		"web.quitConfirm":      "Uscire dal programma? Le foto non verranno più ricevute finché non lo riavvii.",
 		"web.quitDone":         "Il programma è stato arrestato. Puoi chiudere questa scheda.",
+		"acl.badEntry":         "Voce non valida nell’elenco delle fotocamere consentite: %s (usa un indirizzo IP, una rete come 192.168.1.0/24, serial:NUMERO o model:NOME).",
+		"acl.needIP":           "Inserisci l’indirizzo IP della fotocamera (ad esempio 192.168.1.50).",
+		"acl.notListed":        "L’indirizzo %s non è nell’elenco delle fotocamere consentite.",
+		"acl.notLocal":         "%s non è un indirizzo della rete locale. Aggiungilo all’elenco delle fotocamere consentite se vuoi davvero usarlo.",
+		"acl.model":            "Il modello di fotocamera «%s» non è nell’elenco delle fotocamere consentite.",
+		"acl.serial":           "Il numero di serie «%s» non è nell’elenco delle fotocamere consentite.",
+		"set.acl":              "Fotocamere consentite",
+		"set.aclHelp":          "Vengono usate solo queste fotocamere. Una voce per riga: indirizzo IP (192.168.1.50), rete (192.168.1.0/24), serial:NUMERO o model:NOME. Vuoto = qualsiasi fotocamera della rete locale. Deve corrispondere ogni tipo di voce presente, ad esempio rete e numero di serie.",
 	})
 }

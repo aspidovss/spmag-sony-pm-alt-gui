@@ -342,3 +342,120 @@ func TestQuitEndpoint(t *testing.T) {
 		t.Fatal("quit callback not called")
 	}
 }
+
+func TestBruteForceIsStopped(t *testing.T) {
+	e := newEnv(t, 1, nil)
+	h := web.Handler(web.Options{Ctl: e.ctl, User: "admin", Password: "s3cret"})
+	tryWith := func(user, pass string) int {
+		return e.req(h, "GET", "/api/state", nil, func(r *http.Request) {
+			r.RemoteAddr = "203.0.113.9:5555"
+			if user != "" {
+				r.SetBasicAuth(user, pass)
+			}
+		}).Code
+	}
+	// the browser's first request has no credentials: it does not count
+	for i := 0; i < 8; i++ {
+		if c := tryWith("", ""); c != 401 {
+			t.Fatalf("anonymous request: %d", c)
+		}
+	}
+	for i := 0; i < 5; i++ {
+		if c := tryWith("admin", "wrong"); c != 401 {
+			t.Fatalf("guess %d: %d", i, c)
+		}
+	}
+	// now even the right password is refused for a while
+	if c := tryWith("admin", "s3cret"); c != 429 {
+		t.Fatalf("after 5 failures: %d, want 429", c)
+	}
+	// another address is not affected
+	w := e.req(h, "GET", "/api/state", nil, func(r *http.Request) {
+		r.RemoteAddr = "198.51.100.7:1234"
+		r.SetBasicAuth("admin", "s3cret")
+	})
+	if w.Code != 200 {
+		t.Fatalf("other address: %d", w.Code)
+	}
+}
+
+func TestSecurityHeadersAndLimits(t *testing.T) {
+	e := newEnv(t, 1, nil)
+	h := web.Handler(web.Options{Ctl: e.ctl, LoopbackOnly: true})
+	w := e.req(h, "GET", "/", nil, nil)
+	for k, want := range map[string]string{
+		"X-Frame-Options":              "DENY",
+		"X-Content-Type-Options":       "nosniff",
+		"Referrer-Policy":              "no-referrer",
+		"Cross-Origin-Opener-Policy":   "same-origin",
+		"Cross-Origin-Resource-Policy": "same-origin",
+		"Cache-Control":                "no-store",
+	} {
+		if got := w.Header().Get(k); got != want {
+			t.Errorf("%s = %q, want %q", k, got, want)
+		}
+	}
+	if csp := w.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "default-src 'self'") || strings.Contains(csp, "unsafe-") {
+		t.Errorf("CSP: %q", csp)
+	}
+	// embedded files cannot be escaped from
+	for _, p := range []string{"/../go.mod", "/..%2f..%2fgo.mod", "/static/../../go.mod", "/%2e%2e/%2e%2e/etc/passwd"} {
+		if w := e.req(h, "GET", p, nil, nil); w.Code == 200 && strings.Contains(w.Body.String(), "module ") {
+			t.Errorf("%s leaked a file", p)
+		}
+	}
+	// oversized request bodies are cut off
+	big := strings.Repeat("a", 2<<20)
+	if w := e.req(h, "POST", "/api/settings", map[string]string{"destDir": big}, nil); w.Code != 400 {
+		t.Errorf("2 MB body: %d, want 400", w.Code)
+	}
+	// log lines are capped (they can contain text from the network)
+	var lb web.LogBuffer
+	lb.Append(strings.Repeat("x", 100000))
+	lines, _ := lb.Since(0)
+	if len(lines) != 1 || len(lines[0]) > 2100 {
+		t.Errorf("log line length %d", len(lines[0]))
+	}
+}
+
+func TestCameraAccessListThroughThePage(t *testing.T) {
+	e := newEnv(t, 1, nil)
+	h := web.Handler(web.Options{Ctl: e.ctl, LoopbackOnly: true})
+	body := func(list ...string) map[string]any {
+		return map[string]any{"destDir": filepath.Join(e.dir, "photos"), "jpeg": true, "allowedCameras": list}
+	}
+	// typos are refused and nothing is saved
+	if w := e.req(h, "POST", "/api/settings", body("192.168.1.5", "oops"), nil); w.Code != 400 {
+		t.Fatalf("invalid entry: %d %s", w.Code, w.Body)
+	}
+	if got := e.ctl.Settings().AllowedCameras; len(got) != 0 {
+		t.Fatalf("saved despite the error: %v", got)
+	}
+	// a valid list is cleaned (comments, duplicates, separators) and saved
+	w := e.req(h, "POST", "/api/settings", body("192.168.1.0/24, serial:123\n# note\n192.168.1.0/24", "model:ILCA-77M2"), nil)
+	if w.Code != 200 {
+		t.Fatalf("save: %d %s", w.Code, w.Body)
+	}
+	cfg, _ := config.Load()
+	if strings.Join(cfg.AllowedCameras, "|") != "192.168.1.0/24|serial:123|model:ILCA-77M2" {
+		t.Fatalf("saved list: %v", cfg.AllowedCameras)
+	}
+	var back struct{ AllowedCameras []string }
+	_ = json.Unmarshal(e.req(h, "GET", "/api/settings", nil, nil).Body.Bytes(), &back)
+	if len(back.AllowedCameras) != 3 {
+		t.Fatalf("GET: %v", back.AllowedCameras)
+	}
+	// "Connect to IP" respects the list
+	if w := e.req(h, "POST", "/api/action", map[string]string{"action": "connectIP", "ip": "10.9.9.9"}, nil); w.Code != 400 {
+		t.Fatalf("address outside the list: %d", w.Code)
+	}
+	if w := e.req(h, "POST", "/api/action", map[string]string{"action": "connectIP", "ip": "192.168.1.77"}, nil); w.Code != 200 {
+		t.Fatalf("address inside the list: %d %s", w.Code, w.Body)
+	}
+	// without a list public addresses are still refused
+	body0 := body()
+	e.req(h, "POST", "/api/settings", body0, nil)
+	if w := e.req(h, "POST", "/api/action", map[string]string{"action": "connectIP", "ip": "8.8.8.8"}, nil); w.Code != 400 {
+		t.Fatalf("public address: %d", w.Code)
+	}
+}
