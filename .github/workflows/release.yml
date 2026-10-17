@@ -30,7 +30,10 @@ jobs:
             tar -czf "$lin.tar.gz" "$lin"
           done
           cp dist/spmag-wpr_*.deb .
-          sha256sum SPMAG-*.zip SPMAG-*.tar.gz spmag-wpr_*.deb > SHA256SUMS.txt
+          for arch in amd64 arm64; do
+            cp "dist/SPMAG-wpr-${v#v}-linux-$arch.AppImage" "SPMAG-wpr-$v-linux-$arch.AppImage"
+          done
+          sha256sum SPMAG-*.zip SPMAG-*.tar.gz SPMAG-*.AppImage spmag-wpr_*.deb > SHA256SUMS.txt
           # release notes: only this version's section of the changelog
           awk -v v="${v#v}" '/^## /{p = ($2 == v || $2 == "v" v)} p' CHANGELOG.md > release-notes.md
           test -s release-notes.md || cp CHANGELOG.md release-notes.md
@@ -39,6 +42,7 @@ jobs:
           files: |
             SPMAG-*.zip
             SPMAG-*.tar.gz
+            SPMAG-*.AppImage
             spmag-wpr_*.deb
             SHA256SUMS.txt
           body_path: release-notes.md

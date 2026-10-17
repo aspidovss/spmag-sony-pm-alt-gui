@@ -30,9 +30,12 @@ online services.
 * System tray icon, start with Windows, notifications.
 * Built-in pairing over USB. It also accepts an existing PlayMemories Home pairing.
 * A single portable `.exe` without installer or runtime (Windows 10/11, x64).
-* **Linux**: service `wpr watch` (systemd, `.deb` package or Docker) for home
-  servers, NAS and Raspberry Pi (amd64 and arm64), with a **browser interface**
-  and USB pairing.
+* **Browser interface** on Windows and Linux: switch it on in the settings and
+  choose the port, login and password. Control the program from a phone or
+  another computer.
+* **Linux**: one-file **AppImage**, service `wpr watch` (systemd, `.deb` package
+  or Docker) for desktops, home servers, NAS and Raspberry Pi (amd64 and arm64),
+  with the browser interface and USB pairing.
 * Command-line tool `wpr` for troubleshooting and scripting.
 
 ### Tested cameras
@@ -79,7 +82,46 @@ Turn off *"Download missing files automatically"* in Settings if you prefer to
 look at the list first. Then use **Download missing** or **Download selected**.
 Close PlayMemories Home if it is still installed, because it may grab the camera first.
 
-## Linux (service, browser interface, Docker)
+## Browser interface (Windows and Linux)
+
+Both versions can show their window in a browser. On Windows open **Settings →
+Web interface**; on Linux the same group is on the *Settings* tab of the page
+(or start with `wpr watch -ui`, see AppImage below).
+
+| Option | Meaning |
+|---|---|
+| Turn on the web interface | starts / stops the web server at once when you save |
+| Port | TCP port, default `8080`; the page follows when you change it |
+| Login / Password | HTTP Basic authentication; the default login is `admin` |
+| Allow access from other computers | off: only this computer (`127.0.0.1`); on: the whole network, **a password is required** |
+
+Without a password only this computer can connect. The password is stored in
+`settings.json` (readable only by your account on Linux) and is never sent back
+to the page. If the port is already used, the settings show the reason and the
+program keeps receiving photos. On Windows the firewall usually asks for permission the
+first time the interface is opened to the network.
+
+Options given on the command line (`-web`, `-web-password`, `SPMAG_WEB`) win over
+the settings; the page then shows the web options as read-only.
+
+## Linux (AppImage, service, browser interface, Docker)
+
+**AppImage** (any desktop distribution, no installation): download
+`SPMAG-wpr-<version>-linux-amd64.AppImage` (or `arm64`) from Releases.
+
+```sh
+chmod +x SPMAG-wpr-v*-linux-amd64.AppImage
+./SPMAG-wpr-v*-linux-amd64.AppImage         # or double-click it in the file manager
+```
+
+Starting it without arguments runs the receiver, turns on the browser interface
+for this computer only and opens it in your browser. It has an **Exit** button
+(there is no window or tray icon). Starting it a second time just opens the page
+again. With arguments it behaves like `wpr`, for example
+`./SPMAG-wpr-…AppImage watch -h` or `sudo ./SPMAG-wpr-…AppImage pair`.
+If your system has no FUSE, run it with `--appimage-extract-and-run` (or set
+`APPIMAGE_EXTRACT_AND_RUN=1`). It is a static program: it needs nothing else.
+The AppImage has not yet been tested on ARM hardware.
 
 `wpr watch` runs without a desktop. It waits for the camera, downloads the
 missing files, tells the camera it is done and waits for the next time. The
@@ -104,10 +146,12 @@ folder, so it is protected:
 
 * On `127.0.0.1` / `localhost` it needs no password, and requests whose `Host`
   header is not local are refused (protection against DNS rebinding).
-* On any network address (for example `-web :8080`, or in Docker) it **refuses to
-  start without a password**: set `-web-password` or the environment variable
-  `SPMAG_WEB_PASSWORD`. The browser asks for it (HTTP Basic authentication, any
-  user name). Basic authentication sends the password unencrypted, so use it only
+* On any network address (for example `-web :8080`, or in Docker, or *Allow access
+  from other computers* in the settings) it **refuses to start without a
+  password**: set `-web-password` or the environment variable
+  `SPMAG_WEB_PASSWORD`. The browser asks for it (HTTP Basic authentication; the
+  login is checked when set with `-web-user` / `SPMAG_WEB_USER` or in the
+  settings, otherwise any user name works). Basic authentication sends the password unencrypted, so use it only
   on a trusted LAN, or put a TLS reverse proxy (Caddy, nginx) in front of it.
 * Changing requests need a custom header and a same-origin request, so another
   web page cannot drive it from your browser.
@@ -166,7 +210,7 @@ web page add `--device /dev/sg1` (the camera's device from `wpr usb`).
 
 Useful `wpr watch` options: `-dest DIR`, `-types jpeg,raw,video,other`,
 `-pattern '{yyyy}/{yyyy}-{MM}-{dd}'`, `-guid ID`, `-name NAME`, `-no-finish`,
-`-lang ru`, `-web ADDR`, `-web-password PW`, `-save` (store the options in
+`-lang ru`, `-web ADDR`, `-web-user NAME`, `-web-password PW`, `-ui`, `-save` (store the options in
 `~/.config/spmag-wifi-photo-receiver/settings.json`). Allow inbound UDP 1900
 from the LAN if a firewall is active
 (`sudo ufw allow from 192.168.0.0/16 to any port 1900 proto udp`) and the web
@@ -206,14 +250,14 @@ PTP/IP, TCP 15740 ── Init Command Request with this PC's 16-byte GUID
 
 ```
 cmd/WifiPhotoReceiver/   Windows GUI (tray, file list, settings) — lxn/walk
-cmd/wpr/                 command-line tool and Linux service (wpr watch, -web)
+cmd/wpr/                 command-line tool and Linux service (wpr watch, -web, -ui)
 internal/ptpip/          PTP/IP client: packets, transactions, datasets, Sony ops
 internal/ssdp/           camera discovery (SSDP listener, M-SEARCH, description)
 internal/pairing/        GUIDs, PlayMemories-style GUIDs, USB pairing (Windows, Linux)
 internal/transfer/       session: scan, reconcile, download, folder patterns
 internal/store/          database of received files (JSON)
 internal/app/            workflow controller used by the GUI and the web interface
-internal/web/            browser interface: JSON API + embedded page (static/)
+internal/web/            browser interface: JSON API, embedded page (static/), server manager
 internal/i18n/           interface translations (10 languages)
 internal/config/         settings (%APPDATA%\SPMAG Wifi Photo Receiver\settings.json)
 internal/capture/        records camera answers as test fixtures (wpr capture)
@@ -222,7 +266,7 @@ internal/winutil/        autostart, elevation, firewall rule, single instance
 internal/icon/           application icon drawn in code
 tools/genres/            generates icon + manifest for the .exe
 testdata/<model>/        real camera answers (serial/MAC/IP masked)
-packaging/linux/         systemd unit, .deb packaging
+packaging/linux/         systemd unit, .deb and AppImage packaging
 Dockerfile, docker-compose.yml   container for wpr watch
 ```
 
@@ -250,8 +294,12 @@ Nothing else is required. The build installs the `rsrc` resource tool automatica
 go test ./internal/...
 ```
 
+`build.sh` also builds the `.deb` packages and the AppImages. The AppImage
+tools (appimagetool and the runtime) are downloaded on the first run; set
+`SKIP_APPIMAGE=1` to skip that step.
+
 GitHub Actions builds every push. Pushing a tag `v*` creates a release with
-the zipped executables.
+the zipped executables, Linux archives, `.deb` packages and AppImages.
 
 ## Command-line tool
 
@@ -323,9 +371,9 @@ parameters, data layouts) were taken from the sources above.
 
 ## Roadmap
 
-* **Linux**: ✅ service `wpr watch`, systemd, `.deb`, Docker, amd64/arm64 builds,
-  browser interface, USB pairing through `/dev/sg*` (needs a test with a real
-  camera). Not planned for now: a separate tray icon — the browser interface
+* **Linux**: ✅ AppImage, service `wpr watch`, systemd, `.deb`, Docker,
+  amd64/arm64 builds, browser interface (also on Windows), USB pairing through
+  `/dev/sg*` (needs a test with a real camera). Not planned for now: a separate tray icon — the browser interface
   covers the desktop.
 * More tested cameras: add yours with `wpr capture`.
 

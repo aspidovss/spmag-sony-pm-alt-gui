@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=SPMAG Wifi Photo Receiver
+GenericName=Camera Wi-Fi photo import
+Comment=Receive photos from a Sony camera over Wi-Fi (Send to Computer)
+Exec=wpr
+Icon=spmag-wpr
+Terminal=false
+Categories=Graphics;Photography;Network;
+Keywords=Sony;camera;photo;Wi-Fi;PlayMemories;

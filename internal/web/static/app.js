@@ -63,6 +63,7 @@
 
   function renderState(st, force) {
     lastState = st;
+    $("btnQuit").hidden = !st.canQuit;
     if (st.lang !== lang && lang !== "") { loadStrings(); }
     $("title").textContent = st.title;
     $("detail").textContent = st.detail;
@@ -194,6 +195,22 @@
     $("language").dataset.value = s.language || "";
     fillLanguages();
     $("pairBox").hidden = !s.usbSupported;
+    fillWeb(s);
+  }
+
+  const webFields = ["webEnabled", "webPort", "webUser", "webPassword", "webClear", "webRemote"];
+  let listenPort = location.port;
+
+  function fillWeb(s) {
+    $("webEnabled").checked = !!s.webEnabled; $("webPort").value = s.webPort;
+    $("webUser").value = s.webUser; $("webRemote").checked = !!s.webRemote;
+    $("webPassword").value = ""; $("webClear").checked = false;
+    $("webPassword").placeholder = s.webPasswordSet ? tx("web.passKeep") : "";
+    $("webClearRow").hidden = !s.webPasswordSet;
+    for (const k of webFields) $(k).disabled = !!s.webLocked;
+    $("webLockedNote").hidden = !s.webLocked;
+    const st = s.webStatus || {};
+    $("webStatus").textContent = st.error ? tx("set.webError").replace("%s", st.error) : st.running ? tx("set.webRunning").replace("%s", "http://" + st.addr) : tx("set.webStopped");
   }
 
   async function loadSettings() {
@@ -215,11 +232,20 @@
     e.preventDefault();
     const body = { destDir: $("destDir").value, folderPattern: $("pattern").value, hostName: $("hostName").value, language: $("language").value };
     for (const k of ["jpeg", "raw", "video", "other", "auto", "finish", "match", "pmh"]) body[k] = $(k).checked;
+    Object.assign(body, {
+      webEnabled: $("webEnabled").checked, webPort: parseInt($("webPort").value, 10) || 0,
+      webUser: $("webUser").value, webPassword: $("webPassword").value,
+      webClearPassword: $("webClear").checked, webRemote: $("webRemote").checked,
+    });
     try {
       const s = await api("/api/settings", body);
       await loadStrings();
       fillForm(s);
       say(tx("web.saved"), false);
+      if (s.webRestart && s.webEnabled && String(s.webPort) !== listenPort) {
+        // the server moves to another port: follow it
+        setTimeout(() => { location.href = location.protocol + "//" + location.hostname + ":" + s.webPort + "/"; }, 1200);
+      }
       poll();
     } catch (err) { say(err.message, true); }
   });
@@ -255,8 +281,16 @@
 
   // ---- polling ------------------------------------------------------------
   let busy = false;
+  let stopped = false;
+  $("btnQuit").onclick = async () => {
+    if (!confirm(tx("web.quitConfirm"))) return;
+    try { await api("/api/quit", {}); } catch (e) { /* the server may close the connection */ }
+    stopped = true;
+    $("banner").textContent = tx("web.quitDone");
+    $("banner").hidden = false;
+  };
   async function poll() {
-    if (busy) return;
+    if (busy || stopped) return;
     busy = true;
     try {
       const st = await api("/api/state");
@@ -268,7 +302,7 @@
     } finally { busy = false; }
   }
   function loop() {
-    poll(); pollLog();
+    if (!stopped) { poll(); pollLog(); }
     setTimeout(loop, document.hidden ? 5000 : 1000);
   }
 

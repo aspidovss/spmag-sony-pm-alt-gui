@@ -14,6 +14,7 @@
     <button class="tab active" data-tab="transfer" data-i18n="tab.transfer">Transfer</button>
     <button class="tab" data-tab="settings" data-i18n="tab.settings">Settings</button>
     <button class="tab" data-tab="log" data-i18n="tab.log">Log</button>
+    <button id="btnQuit" class="tab" data-i18n="tray.exit" hidden>Exit</button>
   </nav>
 </header>
 <div id="banner" class="banner" hidden></div>
@@ -96,6 +97,18 @@
       <label class="check"><input id="pmh" type="checkbox"><span data-i18n="set.pmh"></span></label>
       <div id="pairBox"><button type="button" id="btnPair" data-i18n="set.pairUSB">Pair camera via USB…</button> <span id="drives" class="hint"></span></div>
       <p class="hint pre" data-i18n="set.pairHelp"></p>
+    </fieldset>
+    <fieldset id="webBox">
+      <legend data-i18n="set.web">Web interface</legend>
+      <label class="check"><input id="webEnabled" type="checkbox"><span data-i18n="set.webEnable"></span></label>
+      <label class="row"><span data-i18n="set.webPort">Port:</span><input id="webPort" type="number" min="1" max="65535" step="1"></label>
+      <label class="row"><span data-i18n="set.webUser">Login:</span><input id="webUser" type="text" maxlength="64" autocomplete="off"></label>
+      <label class="row"><span data-i18n="set.webPass">Password:</span><input id="webPassword" type="password" maxlength="200" autocomplete="new-password"></label>
+      <label class="check" id="webClearRow"><input id="webClear" type="checkbox"><span data-i18n="web.clearPass"></span></label>
+      <label class="check"><input id="webRemote" type="checkbox"><span data-i18n="set.webRemote"></span></label>
+      <p class="hint" data-i18n="set.webHint"></p>
+      <p id="webStatus" class="hint" role="status"></p>
+      <p id="webLockedNote" class="hint" hidden data-i18n="web.locked"></p>
     </fieldset>
     <fieldset>
       <legend data-i18n="set.language">Language</legend>
