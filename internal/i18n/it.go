@@ -57,7 +57,7 @@ func init() {
 		"set.folder":           "Cartella:",
 		"set.browse":           "Sfoglia…",
 		"set.subfolders":       "Sottocartelle:",
-		"set.patternHelp":      "{yyyy} {MM} {dd} {camera}; vuoto = nessuna sottocartella",
+		"set.patternHelp":      "{yyyy} {MM} {dd} {camera} {serial}; vuoto = nessuna sottocartella",
 		"set.example":          "Esempio:",
 		"set.noSubfolders":     "(nessuna sottocartella)",
 		"set.types":            "Tipi di file da scaricare automaticamente",

@@ -57,7 +57,7 @@ func init() {
 		"set.folder":           "Ordner:",
 		"set.browse":           "Durchsuchen…",
 		"set.subfolders":       "Unterordner:",
-		"set.patternHelp":      "{yyyy} {MM} {dd} {camera}; leer = keine Unterordner",
+		"set.patternHelp":      "{yyyy} {MM} {dd} {camera} {serial}; leer = keine Unterordner",
 		"set.example":          "Beispiel:",
 		"set.noSubfolders":     "(keine Unterordner)",
 		"set.types":            "Automatisch zu ladende Dateitypen",

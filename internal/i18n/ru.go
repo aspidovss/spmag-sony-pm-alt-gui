@@ -57,7 +57,7 @@ func init() {
 		"set.folder":           "Папка:",
 		"set.browse":           "Обзор…",
 		"set.subfolders":       "Подпапки:",
-		"set.patternHelp":      "{yyyy} {MM} {dd} {camera}; пусто = без подпапок",
+		"set.patternHelp":      "{yyyy} {MM} {dd} {camera} {serial}; пусто = без подпапок",
 		"set.example":          "Пример:",
 		"set.noSubfolders":     "(без подпапок)",
 		"set.types":            "Типы файлов для автоматической загрузки",

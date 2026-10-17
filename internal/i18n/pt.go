@@ -57,7 +57,7 @@ func init() {
 		"set.folder":           "Pasta:",
 		"set.browse":           "Procurar…",
 		"set.subfolders":       "Subpastas:",
-		"set.patternHelp":      "{yyyy} {MM} {dd} {camera}; vazio = sem subpastas",
+		"set.patternHelp":      "{yyyy} {MM} {dd} {camera} {serial}; vazio = sem subpastas",
 		"set.example":          "Exemplo:",
 		"set.noSubfolders":     "(sem subpastas)",
 		"set.types":            "Tipos de arquivo a baixar automaticamente",
