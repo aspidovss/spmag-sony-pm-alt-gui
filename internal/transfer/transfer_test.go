@@ -1,6 +1,9 @@
 package transfer
 
 import (
+	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/config"
+	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/store"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,9 +19,10 @@ func TestExpandPattern(t *testing.T) {
 		``:                        "",
 		`{camera}\..\{dd}`:        filepath.Join("ILCE-77M2", "07"),
 		`a:b`:                     "a_b",
+		`{camera}-{serial}\{dd}`:  filepath.Join("ILCE-77M2-1234567", "07"),
 	}
 	for in, want := range cases {
-		if got := ExpandPattern(in, tm, "ILCE-77M2"); got != want {
+		if got := ExpandPattern(in, tm, "ILCE-77M2", "1234567"); got != want {
 			t.Errorf("%q -> %q, want %q", in, got, want)
 		}
 	}
@@ -105,5 +109,59 @@ func TestWithin(t *testing.T) {
 		if got := within(root, p); got != want {
 			t.Errorf("within(%q) = %v, want %v", p, got, want)
 		}
+	}
+}
+
+func TestRecordsAreKeptPerCamera(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "A.ARW")
+	if err := os.WriteFile(file, make([]byte, 10), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	db, err := store.Open(filepath.Join(dir, "db.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Defaults()
+	cfg.MatchExisting = false
+
+	const camA, camB = "ILCA-77M2 111", "ILCA-77M2 222"
+	item := func(cam string) *Item {
+		return &Item{
+			Key:       store.CameraKey(cam, "_DSC0001.ARW", 10, "20261011T022142"),
+			LegacyKey: store.Key("_DSC0001.ARW", 10, "20261011T022142"),
+			Name:      "_DSC0001.ARW", Size: 10, Kind: KindRAW,
+		}
+	}
+
+	// a record of camera A, made by a version that had no camera in the key
+	db.Put(store.Record{Key: item(camA).LegacyKey, Name: "_DSC0001.ARW", Size: 10, Camera: camA, LocalPath: file})
+
+	b := item(camB)
+	reconcileItem(b, &cfg, db, nil, camB)
+	if b.Status != StatusMissing {
+		t.Fatalf("camera B must not inherit camera A's record, got %v", b.Status)
+	}
+	if _, ok := db.Get(item(camA).LegacyKey); !ok {
+		t.Fatal("camera A's old record was taken away by camera B")
+	}
+
+	a := item(camA)
+	reconcileItem(a, &cfg, db, nil, camA)
+	if a.Status != StatusReceived || a.LocalPath != file {
+		t.Fatalf("camera A: %v %q", a.Status, a.LocalPath)
+	}
+	if _, ok := db.Get(a.Key); !ok {
+		t.Fatal("the old record was not moved to the per-camera key")
+	}
+	if _, ok := db.Get(a.LegacyKey); ok {
+		t.Fatal("the old key was left behind")
+	}
+
+	// the same file name of camera B is still a separate, missing file
+	b2 := item(camB)
+	reconcileItem(b2, &cfg, db, nil, camB)
+	if b2.Status != StatusMissing {
+		t.Fatalf("camera B after migration: %v", b2.Status)
 	}
 }

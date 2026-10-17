@@ -57,7 +57,7 @@ func init() {
 		"set.folder":           "Carpeta:",
 		"set.browse":           "Examinar…",
 		"set.subfolders":       "Subcarpetas:",
-		"set.patternHelp":      "{yyyy} {MM} {dd} {camera}; vacío = sin subcarpetas",
+		"set.patternHelp":      "{yyyy} {MM} {dd} {camera} {serial}; vacío = sin subcarpetas",
 		"set.example":          "Ejemplo:",
 		"set.noSubfolders":     "(sin subcarpetas)",
 		"set.types":            "Tipos de archivo que se descargan automáticamente",

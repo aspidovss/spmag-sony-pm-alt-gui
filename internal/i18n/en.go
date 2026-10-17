@@ -59,7 +59,7 @@ func init() {
 		"set.folder":           "Folder:",
 		"set.browse":           "Browse…",
 		"set.subfolders":       "Subfolders:",
-		"set.patternHelp":      "{yyyy} {MM} {dd} {camera}; empty = no subfolders",
+		"set.patternHelp":      "{yyyy} {MM} {dd} {camera} {serial}; empty = no subfolders",
 		"set.example":          "Example:",
 		"set.noSubfolders":     "(no subfolders)",
 		"set.types":            "File types to download automatically",

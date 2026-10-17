@@ -31,6 +31,17 @@ func Key(name string, size uint64, captured string) string {
 	return strings.ToUpper(name) + "|" + strconv.FormatUint(size, 10) + "|" + captured
 }
 
+// CameraKey is Key scoped to one camera (its model and serial number), so that
+// two cameras whose file names, sizes and capture times happen to coincide do
+// not shadow each other. Without a camera identity it is the plain Key.
+func CameraKey(camera, name string, size uint64, captured string) string {
+	camera = strings.TrimSpace(camera)
+	if camera == "" {
+		return Key(name, size, captured)
+	}
+	return camera + "#" + Key(name, size, captured)
+}
+
 // DB is a JSON-backed set of records.
 type DB struct {
 	mu    sync.Mutex

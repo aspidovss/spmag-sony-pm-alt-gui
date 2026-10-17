@@ -57,7 +57,7 @@ func init() {
 		"set.folder":           "フォルダー:",
 		"set.browse":           "参照…",
 		"set.subfolders":       "サブフォルダー:",
-		"set.patternHelp":      "{yyyy} {MM} {dd} {camera}; 空欄 = サブフォルダーなし",
+		"set.patternHelp":      "{yyyy} {MM} {dd} {camera} {serial}; 空欄 = サブフォルダーなし",
 		"set.example":          "例:",
 		"set.noSubfolders":     "（サブフォルダーなし）",
 		"set.types":            "自動でダウンロードするファイルの種類",

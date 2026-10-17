@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.4.3
+
+- **Several cameras, one after another:** the list of received files is now kept
+  per camera (model + serial number). Before, two cameras whose file name, size
+  and capture time coincided could be taken for the same file. Records of older
+  versions are taken over automatically by the camera that connects first and
+  matches (records already tied to another camera are left alone).
+- **New folder pattern token `{serial}`** (e.g. `{camera}-{serial}\{yyyy}-{MM}-{dd}`),
+  so cameras of the same model get separate folders. Only one camera is served
+  at a time; a second one connects after the first finishes.
+
 ## v0.4.2
 
 - **Fixed (Windows): the close button quit the program instead of hiding it to

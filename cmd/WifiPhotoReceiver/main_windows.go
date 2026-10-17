@@ -149,6 +149,7 @@ var patterns = []string{
 	`{yyyy}-{MM}-{dd}`,
 	`{yyyy}\{MM}`,
 	`{camera}\{yyyy}-{MM}-{dd}`,
+	`{camera}-{serial}\{yyyy}-{MM}-{dd}`,
 	``,
 }
 
@@ -749,7 +750,7 @@ func (g *gui) updatePatternExample() {
 	if g.patternExample == nil || g.destLE == nil {
 		return
 	}
-	ex := filepath.Join(g.destLE.Text(), transfer.ExpandPattern(g.currentPattern(), time.Now(), "ILCE-77M2"), "DSC01234.JPG")
+	ex := filepath.Join(g.destLE.Text(), transfer.ExpandPattern(g.currentPattern(), time.Now(), "ILCE-77M2", "1234567"), "DSC01234.JPG")
 	_ = g.patternExample.SetText(ex)
 }
 
