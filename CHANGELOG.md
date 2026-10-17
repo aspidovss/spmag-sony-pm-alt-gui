@@ -7,6 +7,8 @@
   program serves plain HTTP only, so HTTP/2 is not enabled in it; the update is
   made to keep the standard library current.
 - Go 1.27.2 or newer is needed to build from source.
+- CI: govulncheck updated to v1.9.0 (v1.1.4 crashed on Go 1.27 sources, so the
+  informational check produced no result).
 - Logo in the README.
 
 ## v0.4.3
