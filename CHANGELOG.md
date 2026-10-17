@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.4.4
+
+- Built with Go 1.27.2 (was 1.22, which no longer gets security fixes). Go 1.27.2
+  contains the fix for GO-2026-6611 (HTTP/2 CPU exhaustion in `net/http`). The
+  program serves plain HTTP only, so HTTP/2 is not enabled in it; the update is
+  made to keep the standard library current.
+- Go 1.27.2 or newer is needed to build from source.
+- Logo in the README.
+
 ## v0.4.3
 
 - **Several cameras, one after another:** the list of received files is now kept

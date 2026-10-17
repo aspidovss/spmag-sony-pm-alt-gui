@@ -10,7 +10,7 @@
 # address it refuses to start without SPMAG_WEB_PASSWORD. Leave both unset for a
 # headless receiver. USB pairing from the web page needs the camera's SCSI
 # device: add  --device /dev/sg1  (see "wpr usb" on the host).
-FROM golang:1.22-alpine AS build
+FROM golang:1.27-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
