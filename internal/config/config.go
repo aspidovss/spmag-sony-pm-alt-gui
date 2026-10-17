@@ -35,6 +35,8 @@ type Settings struct {
 	StartWithWindows bool `json:"start_with_windows"`
 	StartMinimized   bool `json:"start_minimized"`
 	Notifications    bool `json:"notifications"`
+	CloseExits       bool `json:"close_exits"`      // the close button quits instead of hiding to the tray
+	MinimizeToTray   bool `json:"minimize_to_tray"` // the minimize button hides the window to the tray
 
 	GUID             string `json:"guid"`               // our own PTP/IP GUID
 	AcceptPMHPairing bool   `json:"accept_pmh_pairing"` // also try PlayMemories-style (MAC) GUIDs
@@ -76,6 +78,7 @@ func Defaults() Settings {
 		MatchExisting:    true,
 		StartMinimized:   true,
 		Notifications:    true,
+		MinimizeToTray:   true,
 		AcceptPMHPairing: true,
 		WebPort:          DefaultWebPort,
 		WebUser:          DefaultWebUser,

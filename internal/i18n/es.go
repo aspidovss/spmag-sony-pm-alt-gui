@@ -72,6 +72,8 @@ func init() {
 		"set.startWin":         "Iniciar con Windows (en la bandeja)",
 		"set.startMin":         "Al iniciar con Windows, permanecer en la bandeja",
 		"set.notify":           "Mostrar notificaciones",
+		"set.closeExits":       "El botón cerrar sale del programa (en vez de ocultarlo en la bandeja)",
+		"set.minTray":          "El botón minimizar oculta en la bandeja",
 		"set.pairing":          "Emparejamiento de la cámara",
 		"set.guid":             "ID de este PC (GUID):",
 		"set.newID":            "Nuevo ID",

@@ -72,6 +72,8 @@ func init() {
 		"set.startWin":         "Avvia con Windows (nell’area di notifica)",
 		"set.startMin":         "All’avvio con Windows, resta nell’area di notifica",
 		"set.notify":           "Mostra notifiche",
+		"set.closeExits":       "Il pulsante chiudi esce dal programma (invece di nasconderlo nell’area di notifica)",
+		"set.minTray":          "Il pulsante riduci a icona nasconde nell’area di notifica",
 		"set.pairing":          "Associazione fotocamera",
 		"set.guid":             "ID di questo PC (GUID):",
 		"set.newID":            "Nuovo ID",

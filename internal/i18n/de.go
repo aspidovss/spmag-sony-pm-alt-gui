@@ -72,6 +72,8 @@ func init() {
 		"set.startWin":         "Mit Windows starten (im Infobereich)",
 		"set.startMin":         "Beim Start mit Windows im Infobereich bleiben",
 		"set.notify":           "Benachrichtigungen anzeigen",
+		"set.closeExits":       "Schließen-Schaltfläche beendet das Programm (statt in den Infobereich zu minimieren)",
+		"set.minTray":          "Minimieren-Schaltfläche blendet in den Infobereich aus",
 		"set.pairing":          "Kamerakopplung",
 		"set.guid":             "ID dieses PCs (GUID):",
 		"set.newID":            "Neue ID",

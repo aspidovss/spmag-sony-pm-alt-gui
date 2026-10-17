@@ -72,6 +72,8 @@ func init() {
 		"set.startWin":         "Windows와 함께 시작(트레이)",
 		"set.startMin":         "Windows와 함께 시작하면 트레이에 유지",
 		"set.notify":           "알림 표시",
+		"set.closeExits":       "닫기 버튼으로 프로그램 종료 (트레이로 숨기지 않음)",
+		"set.minTray":          "최소화 버튼으로 트레이에 숨기기",
 		"set.pairing":          "카메라 페어링",
 		"set.guid":             "이 PC의 ID (GUID):",
 		"set.newID":            "새 ID",
