@@ -34,6 +34,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/acl"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/app"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/capture"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/config"
@@ -181,7 +182,11 @@ func cmdList(ctx context.Context, args []string, pull bool) error {
 	if err != nil {
 		return err
 	}
-	s, err := transfer.Connect(ctx, host, cfg, db, logf)
+	connect := transfer.Connect // an address typed with -ip: must be local unless listed
+	if *ip == "" {
+		connect = transfer.ConnectDiscovered // found by its announcement
+	}
+	s, err := connect(ctx, host, cfg, db, logf)
 	if err != nil {
 		return err
 	}
@@ -419,6 +424,7 @@ func cmdWatch(ctx context.Context, args []string) error {
 	webAddr := fs.String("web", os.Getenv("SPMAG_WEB"), "serve the web interface on this address, e.g. 127.0.0.1:8080 or :8080 (env SPMAG_WEB)")
 	webPass := fs.String("web-password", os.Getenv("SPMAG_WEB_PASSWORD"), "password for the web interface (env SPMAG_WEB_PASSWORD); required unless the address is loopback")
 	webUser := fs.String("web-user", os.Getenv("SPMAG_WEB_USER"), "login for the web interface (env SPMAG_WEB_USER); empty = any user name")
+	allow := fs.String("allow", "", "only use these cameras: comma-separated IP addresses, networks (192.168.1.0/24), serial:NUMBER, model:NAME (default: the saved list; empty = any camera on the local network)")
 	ui := fs.Bool("ui", false, "turn the web interface on (this computer only, unless settings say otherwise) and open it in the browser")
 	webOpen := fs.Bool("web-no-auth", false, "allow the web interface on a network address without a password (not recommended)")
 	lang := fs.String("lang", "", "language of the web interface and status texts: en, zh, es, fr, de, pt, ru, ja, ko, it (default: settings, then system)")
@@ -440,6 +446,13 @@ func cmdWatch(ctx context.Context, args []string) error {
 	// The web interface comes from -web (fixed) or from the saved settings.
 	webOn := *webAddr != "" || cfg.WebEnabled
 
+	if *allow != "" {
+		cfg.AllowedCameras = acl.Split(*allow)
+	}
+	rules, err := acl.Parse(cfg.AllowedCameras)
+	if err != nil {
+		return err
+	}
 	cfg.DestDir = *dest
 	cfg.FolderPattern = *pattern
 	cfg.HostName = *name
@@ -477,8 +490,8 @@ func cmdWatch(ctx context.Context, args []string) error {
 	}
 
 	fmt.Printf("%s %s (wpr watch)\n", config.AppName, config.RepoURL)
-	fmt.Printf("  save to:   %s\n  types:     %s\n  this ID:   %s\n  settings:  %s\n",
-		cfg.DestDir, typesString(cfg), cfg.GUID, config.Dir())
+	fmt.Printf("  save to:   %s\n  types:     %s\n  this ID:   %s\n  settings:  %s\n  cameras:   %s\n",
+		cfg.DestDir, typesString(cfg), cfg.GUID, config.Dir(), rules)
 
 	var logs web.LogBuffer
 	c := app.New(cfg, db)

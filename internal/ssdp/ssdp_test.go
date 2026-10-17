@@ -2,7 +2,12 @@ package ssdp
 
 import (
 	"bytes"
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/fixtures"
 )
@@ -49,5 +54,63 @@ func TestCapturedDiscovery(t *testing.T) {
 				t.Fatalf("%+v", cam)
 			}
 		})
+	}
+}
+
+func TestCleanText(t *testing.T) {
+	for in, want := range map[string]string{
+		"ILCE-77M2":             "ILCE-77M2",
+		"evil\nSaved x → y":     "evil Saved x → y",
+		"a\r\nb\tc\x00d\x1b[2J": "a  b c d [2J",
+		"  padded  ":            "padded",
+		"line sep":              "line sep",
+		"":                      "",
+	} {
+		if got := CleanText(in); got != want {
+			t.Errorf("CleanText(%q) = %q, want %q", in, got, want)
+		}
+	}
+	long := strings.Repeat("あ", 500)
+	if n := len([]rune(CleanText(long))); n != 100 {
+		t.Errorf("default cap: %d", n)
+	}
+	if n := len([]rune(CleanTextN(long, 255))); n != 255 {
+		t.Errorf("custom cap: %d", n)
+	}
+}
+
+func TestDescriptionIsCleaned(t *testing.T) {
+	xml := "<root><device><friendlyName>Cam\nera</friendlyName><manufacturer>Sony\r\nCorp</manufacturer><modelName>ILCE\t1</modelName></device></root>"
+	c, err := ParseDescription(strings.NewReader(xml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.ContainsAny(c.FriendlyName+c.Manufacturer+c.Model, "\n\r\t\x00") {
+		t.Fatalf("control characters survived: %+v", c)
+	}
+	// the XML parser itself refuses a NUL byte
+	if _, err := ParseDescription(strings.NewReader("<root><device><friendlyName>a\x00b</friendlyName></device></root>")); err == nil {
+		t.Fatal("NUL in XML must be an error")
+	}
+}
+
+func TestFetchDoesNotFollowRedirects(t *testing.T) {
+	hit := make(chan struct{}, 1)
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit <- struct{}{}
+		w.Write([]byte("<root/>"))
+	}))
+	defer other.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL, http.StatusFound)
+	}))
+	defer srv.Close()
+	if _, err := FetchRaw(context.Background(), srv.URL); err == nil {
+		t.Fatal("a redirect must be an error")
+	}
+	select {
+	case <-hit:
+		t.Fatal("the redirect target was contacted")
+	case <-time.After(200 * time.Millisecond):
 	}
 }

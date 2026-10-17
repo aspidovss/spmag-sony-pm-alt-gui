@@ -195,6 +195,7 @@
     $("language").dataset.value = s.language || "";
     fillLanguages();
     $("pairBox").hidden = !s.usbSupported;
+    $("allowed").value = (s.allowedCameras || []).join("\n");
     fillWeb(s);
   }
 
@@ -232,6 +233,7 @@
     e.preventDefault();
     const body = { destDir: $("destDir").value, folderPattern: $("pattern").value, hostName: $("hostName").value, language: $("language").value };
     for (const k of ["jpeg", "raw", "video", "other", "auto", "finish", "match", "pmh"]) body[k] = $(k).checked;
+    body.allowedCameras = $("allowed").value.split("\n");
     Object.assign(body, {
       webEnabled: $("webEnabled").checked, webPort: parseInt($("webPort").value, 10) || 0,
       webUser: $("webUser").value, webPassword: $("webPassword").value,

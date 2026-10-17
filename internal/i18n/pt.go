@@ -162,5 +162,13 @@ func init() {
 		"web.clearPass":        "Remover a palavra-passe",
 		"web.quitConfirm":      "Sair do programa? As fotos não serão recebidas até que seja iniciado novamente.",
 		"web.quitDone":         "O programa foi parado. Pode fechar este separador.",
+		"acl.badEntry":         "Entrada inválida na lista de câmaras permitidas: %s (use um endereço IP, uma rede como 192.168.1.0/24, serial:NÚMERO ou model:NOME).",
+		"acl.needIP":           "Introduza o endereço IP da câmara (por exemplo, 192.168.1.50).",
+		"acl.notListed":        "O endereço %s não está na lista de câmaras permitidas.",
+		"acl.notLocal":         "%s não é um endereço da rede local. Adicione-o à lista de câmaras permitidas se realmente quiser usá-lo.",
+		"acl.model":            "O modelo de câmara «%s» não está na lista de câmaras permitidas.",
+		"acl.serial":           "O número de série «%s» não está na lista de câmaras permitidas.",
+		"set.acl":              "Câmaras permitidas",
+		"set.aclHelp":          "Só estas câmaras são usadas. Uma entrada por linha: endereço IP (192.168.1.50), rede (192.168.1.0/24), serial:NÚMERO ou model:NOME. Vazio = qualquer câmara da rede local. Cada tipo de entrada presente tem de coincidir, por exemplo rede e número de série.",
 	})
 }

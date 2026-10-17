@@ -164,5 +164,13 @@ func init() {
 		"web.clearPass":        "Remove the password",
 		"web.quitConfirm":      "Exit the program? Photos will no longer be received until it is started again.",
 		"web.quitDone":         "The program has stopped. You can close this tab.",
+		"acl.badEntry":         "Invalid entry in the allowed cameras list: %s (use an IP address, a network such as 192.168.1.0/24, serial:NUMBER or model:NAME).",
+		"acl.needIP":           "Enter the camera’s IP address (for example 192.168.1.50).",
+		"acl.notListed":        "The address %s is not on the allowed cameras list.",
+		"acl.notLocal":         "%s is not a local network address. Add it to the allowed cameras list if you really want to use it.",
+		"acl.model":            "The camera model “%s” is not on the allowed cameras list.",
+		"acl.serial":           "The camera serial number “%s” is not on the allowed cameras list.",
+		"set.acl":              "Allowed cameras",
+		"set.aclHelp":          "Only these cameras are used. One entry per line: an IP address (192.168.1.50), a network (192.168.1.0/24), serial:NUMBER or model:NAME. Empty = any camera on the local network. Every kind of entry that is present must match, for example network and serial.",
 	})
 }

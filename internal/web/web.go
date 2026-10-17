@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/acl"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/app"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/config"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/i18n"
@@ -60,10 +61,16 @@ type LogBuffer struct {
 	first int // absolute index of lines[0]
 }
 
-const maxLogLines = 1000
+const (
+	maxLogLines = 1000
+	maxLogLine  = 2000 // bytes; log lines can contain text from the network
+)
 
 // Append adds a line.
 func (b *LogBuffer) Append(line string) {
+	if len(line) > maxLogLine {
+		line = strings.ToValidUTF8(line[:maxLogLine], "") + "…"
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.lines = append(b.lines, line)
@@ -103,6 +110,7 @@ func IsLoopbackAddr(addr string) bool {
 }
 
 type server struct {
+	lim      *authLimiter
 	o        Options
 	pwHash   [32]byte
 	userHash [32]byte
@@ -116,7 +124,7 @@ func Handler(o Options) http.Handler {
 		o.Logs = &LogBuffer{}
 	}
 	sub, _ := fs.Sub(staticFS, "static")
-	s := &server{o: o, static: http.FileServer(http.FS(sub))}
+	s := &server{o: o, static: http.FileServer(http.FS(sub)), lim: newAuthLimiter()}
 	if o.Password != "" {
 		s.usePW = true
 		s.pwHash = sha256.Sum256([]byte(o.Password))
@@ -159,22 +167,35 @@ func (s *server) guard(next http.Handler) http.Handler {
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Cache-Control", "no-store")
+		h.Set("Cross-Origin-Opener-Policy", "same-origin")
+		h.Set("Cross-Origin-Resource-Policy", "same-origin")
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
 		if s.o.LoopbackOnly && !hostAllowed(r.Host) {
 			http.Error(w, "forbidden host", http.StatusForbidden)
 			return
 		}
 		if s.usePW {
+			ip := clientIP(r)
+			if d := s.lim.blockedFor(ip); d > 0 {
+				h.Set("Retry-After", retryAfter(d))
+				http.Error(w, "too many failed logins, try again later", http.StatusTooManyRequests)
+				return
+			}
 			user, pw, ok := r.BasicAuth()
 			sum := sha256.Sum256([]byte(pw))
 			usum := sha256.Sum256([]byte(user))
 			userOK := subtle.ConstantTimeCompare(usum[:], s.userHash[:]) == 1 || s.o.User == ""
 			passOK := subtle.ConstantTimeCompare(sum[:], s.pwHash[:]) == 1
 			if !ok || !userOK || !passOK {
+				if ok { // a browser's first request carries no credentials: not a failed guess
+					s.lim.fail(ip)
+				}
 				time.Sleep(400 * time.Millisecond) // slow down guessing
 				h.Set("WWW-Authenticate", `Basic realm="`+config.AppName+`", charset="UTF-8"`)
 				http.Error(w, "authentication required", http.StatusUnauthorized)
 				return
 			}
+			s.lim.ok(ip)
 		}
 		if r.Method == http.MethodPost {
 			// A custom header cannot be sent cross-site without a CORS
@@ -324,6 +345,8 @@ type settingsDTO struct {
 	WebPassword      string `json:"webPassword,omitempty"`
 	WebClearPassword bool   `json:"webClearPassword,omitempty"`
 	WebRemote        bool   `json:"webRemote"`
+
+	AllowedCameras []string `json:"allowedCameras"`
 }
 
 type webStatusDTO struct {
@@ -351,6 +374,7 @@ func (s *server) reply(c config.Settings, restart bool) settingsReply {
 			Auto: c.AutoDownload, Finish: c.FinishAfterAuto, Match: c.MatchExisting, PMH: c.AcceptPMHPairing,
 			GUID: c.GUID, HostName: c.HostName, Language: c.Language,
 			WebEnabled: a.Enabled, WebPort: a.Port, WebUser: a.User, WebRemote: a.Remote,
+			AllowedCameras: append([]string{}, c.AllowedCameras...),
 		},
 		Languages: i18n.Languages, USBSupported: pairing.USBSupported,
 		WebPassSet: a.Password != "", WebRestart: restart,
@@ -420,6 +444,12 @@ func (s *server) settings(w http.ResponseWriter, r *http.Request) {
 		c.AutoDownload, c.FinishAfterAuto, c.MatchExisting, c.AcceptPMHPairing = in.Auto, in.Finish, in.Match, in.PMH
 		c.HostName = strings.TrimSpace(in.HostName)
 		c.Language = in.Language
+		list := acl.Split(strings.Join(in.AllowedCameras, "\n"))
+		if _, err := acl.Parse(list); err != nil {
+			writeErr(w, r, http.StatusBadRequest, err.Error())
+			return
+		}
+		c.AllowedCameras = list
 
 		// Web access options: only when this server can restart itself and
 		// the command line has not fixed them.
@@ -508,7 +538,11 @@ func (s *server) action(w http.ResponseWriter, r *http.Request) {
 	case "connectIP":
 		ip := net.ParseIP(strings.TrimSpace(in.IP))
 		if ip == nil {
-			writeErr(w, r, http.StatusBadRequest, "invalid IP address")
+			writeErr(w, r, http.StatusBadRequest, i18n.T("acl.needIP"))
+			return
+		}
+		if err := ctl.CheckAddr(ip.String()); err != nil { // access list, and no public addresses
+			writeErr(w, r, http.StatusBadRequest, err.Error())
 			return
 		}
 		c := ctl.Settings()

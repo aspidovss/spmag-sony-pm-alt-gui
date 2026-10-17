@@ -98,6 +98,12 @@
       <div id="pairBox"><button type="button" id="btnPair" data-i18n="set.pairUSB">Pair camera via USB…</button> <span id="drives" class="hint"></span></div>
       <p class="hint pre" data-i18n="set.pairHelp"></p>
     </fieldset>
+    <fieldset>
+      <legend data-i18n="set.acl">Allowed cameras</legend>
+      <textarea id="allowed" rows="4" spellcheck="false" autocomplete="off" aria-label="Allowed cameras"
+        placeholder="192.168.1.50&#10;192.168.1.0/24&#10;serial:3012345&#10;model:ILCA-77M2"></textarea>
+      <p class="hint" data-i18n="set.aclHelp"></p>
+    </fieldset>
     <fieldset id="webBox">
       <legend data-i18n="set.web">Web interface</legend>
       <label class="check"><input id="webEnabled" type="checkbox"><span data-i18n="set.webEnable"></span></label>

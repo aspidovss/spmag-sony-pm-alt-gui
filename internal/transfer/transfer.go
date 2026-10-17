@@ -13,10 +13,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
+	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/acl"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/config"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/pairing"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/ptpip"
+	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/ssdp"
 	"github.com/aspidovss/spmag-sony-pm-alt-gui/internal/store"
 )
 
@@ -114,10 +117,29 @@ type Session struct {
 // ErrNoPairing means no candidate GUID was accepted.
 var ErrNoPairing = errors.New("the camera refused this PC: it is not paired. Pair the camera via USB (Settings → Pair camera) or once with PlayMemories Home")
 
-// Connect opens a PTP/IP session with the camera at ip (optionally ip:port).
+// Connect opens a PTP/IP session with the camera at ip (optionally ip:port), an
+// address somebody typed in: without an access list it must be a local one.
 func Connect(ctx context.Context, ip string, cfg config.Settings, db *store.DB, logf func(string, ...any)) (*Session, error) {
+	return connect(ctx, ip, true, cfg, db, logf)
+}
+
+// ConnectDiscovered is Connect for a camera found by its SSDP announcement.
+func ConnectDiscovered(ctx context.Context, ip string, cfg config.Settings, db *store.DB, logf func(string, ...any)) (*Session, error) {
+	return connect(ctx, ip, false, cfg, db, logf)
+}
+
+func connect(ctx context.Context, ip string, manual bool, cfg config.Settings, db *store.DB, logf func(string, ...any)) (*Session, error) {
 	if logf == nil {
 		logf = func(string, ...any) {}
+	}
+	// Access list: check the address before anything (our PC's ID included) is
+	// sent to it. An invalid list refuses everything rather than allowing all.
+	rules, err := acl.Parse(cfg.AllowedCameras)
+	if err != nil {
+		return nil, err
+	}
+	if err := rules.AllowAddr(ip, manual); err != nil {
+		return nil, err
 	}
 	type cand struct {
 		g   pairing.GUID
@@ -175,6 +197,13 @@ func Connect(ctx context.Context, ip string, cfg config.Settings, db *store.DB, 
 		c.Close()
 		return nil, fmt.Errorf("device info: %w", err)
 	}
+	if err := rules.AllowDevice(info.Model, info.SerialNumber); err != nil {
+		c.Close() // before any file list is read
+		return nil, err
+	}
+	// text from the device ends up in logs and on screen
+	info.Manufacturer, info.Model, info.SerialNumber, info.DeviceVersion =
+		ssdp.CleanText(info.Manufacturer), ssdp.CleanText(info.Model), ssdp.CleanText(info.SerialNumber), ssdp.CleanText(info.DeviceVersion)
 	s.Info = info
 	s.CameraID = strings.TrimSpace(info.Model + " " + info.SerialNumber)
 	if info.Model != "" {
@@ -241,6 +270,7 @@ func (s *Session) Scan(ctx context.Context, progress func(n int)) error {
 					size = v
 				}
 			}
+			name := ssdp.CleanTextN(oi.Filename, 255) // no line breaks etc. in logs and tables
 			capRaw := oi.CaptureDate
 			if capRaw == "" {
 				capRaw = oi.ModificationDate
@@ -250,8 +280,8 @@ func (s *Session) Scan(ctx context.Context, progress func(n int)) error {
 				t = time.Time{}
 			}
 			items = append(items, &Item{
-				Key: store.Key(oi.Filename, size, capRaw), Handle: h, Storage: storage,
-				Folder: folder, Name: oi.Filename, Size: size, CapturedRaw: capRaw,
+				Key: store.Key(name, size, capRaw), Handle: h, Storage: storage,
+				Folder: folder, Name: name, Size: size, CapturedRaw: capRaw,
 				Captured: t, Kind: KindOf(oi.Filename),
 			})
 			if progress != nil {
@@ -304,7 +334,7 @@ func reconcileItem(it *Item, cfg *config.Settings, db *store.DB, idx DestIndex, 
 		}
 		it.Note = "received earlier, but the local file is gone"
 	} else if cfg.MatchExisting && idx != nil {
-		if p := idx.Find(it.Name, it.Size); p != "" {
+		if p := idx.Find(SafeFileName(it.Name), it.Size); p != "" {
 			it.Status = StatusReceived
 			it.LocalPath = p
 			it.Note = "found in destination folder"
@@ -520,10 +550,18 @@ func (s *Session) setStatus(it *Item, st Status, note string) {
 
 func (s *Session) downloadOne(ctx context.Context, it *Item, cfg config.Settings, progress func(done, total int64)) (string, int64, error) {
 	dir := filepath.Join(cfg.DestDir, ExpandPattern(cfg.FolderPattern, it.Captured, s.CameraName))
+	// The file name comes from the device on the network and is not trusted.
+	name := SafeFileName(it.Name)
+	if name == "" {
+		name = fmt.Sprintf("file_%08x", it.Handle)
+	}
+	target := filepath.Join(dir, name)
+	if !within(cfg.DestDir, target) {
+		return "", 0, fmt.Errorf("refusing to write outside the destination folder: %q", it.Name)
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", 0, err
 	}
-	target := filepath.Join(dir, it.Name)
 	if st, err := os.Stat(target); err == nil {
 		if uint64(st.Size()) == it.Size {
 			return target, 0, nil // identical file already there
@@ -567,6 +605,50 @@ func (c *countingWriter) Write(p []byte) (int, error) {
 	n, err := c.w.Write(p)
 	c.n += int64(n)
 	return n, err
+}
+
+// within reports whether path is inside root (after cleaning both).
+func within(root, path string) bool {
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(path))
+	if err != nil || rel == "." || rel == ".." || filepath.IsAbs(rel) {
+		return false
+	}
+	return !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+var reservedNames = map[string]bool{"CON": true, "PRN": true, "AUX": true, "NUL": true}
+
+// SafeFileName turns a file name reported by a device into a plain file name
+// that is safe to create on Windows and Linux: no folders (a name such as
+// "..\..\x" keeps only "x"), no control or reserved characters, no trailing
+// dots or spaces, no Windows device names, at most 200 bytes. It returns ""
+// when nothing usable is left.
+func SafeFileName(name string) string {
+	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
+		name = name[i+1:]
+	}
+	name = sanitize(name)
+	name = strings.TrimRight(name, ". ")
+	name = strings.TrimLeft(name, " ")
+	if name == "" || name == "." || name == ".." {
+		return ""
+	}
+	stem := strings.ToUpper(strings.TrimRight(strings.SplitN(name, ".", 2)[0], " "))
+	if reservedNames[stem] || ((strings.HasPrefix(stem, "COM") || strings.HasPrefix(stem, "LPT")) && len(stem) == 4 && stem[3] >= '1' && stem[3] <= '9') {
+		name = "_" + name
+	}
+	if len(name) > 200 {
+		ext := filepath.Ext(name)
+		if len(ext) > 16 {
+			ext = ""
+		}
+		stemPart := name[:200-len(ext)]
+		for len(stemPart) > 0 && !utf8.ValidString(stemPart) {
+			stemPart = stemPart[:len(stemPart)-1]
+		}
+		name = stemPart + ext
+	}
+	return name
 }
 
 func uniqueName(p string) string {

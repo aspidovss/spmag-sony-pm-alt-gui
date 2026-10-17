@@ -3,6 +3,7 @@
 package ptpip
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -58,11 +59,21 @@ func ReadPacket(r io.Reader) (Packet, error) {
 	if n < 8 || n > maxPacket {
 		return Packet{}, fmt.Errorf("ptpip: bad packet length %d", n)
 	}
-	p := make([]byte, n-8)
-	if _, err := io.ReadFull(r, p); err != nil {
+	size := int64(n - 8)
+	if size <= 1<<20 {
+		p := make([]byte, size)
+		if _, err := io.ReadFull(r, p); err != nil {
+			return Packet{}, err
+		}
+		return Packet{Type: t, Payload: p}, nil
+	}
+	// A big packet: do not reserve the announced size up front, the other
+	// side could claim 64 MB and send nothing. Memory grows with real data.
+	var buf bytes.Buffer
+	if _, err := io.CopyN(&buf, r, size); err != nil {
 		return Packet{}, err
 	}
-	return Packet{Type: t, Payload: p}, nil
+	return Packet{Type: t, Payload: buf.Bytes()}, nil
 }
 
 // WritePacket writes one packet to w in a single Write call.
