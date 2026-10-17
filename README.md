@@ -413,6 +413,39 @@ cameras talk to PlayMemories Home:
 All code here is newly written. Only protocol facts (operation codes,
 parameters, data layouts) were taken from the sources above.
 
+## Security notes: what is not protected
+
+The program was reviewed for security (see [SECURITY.md](SECURITY.md)), but
+some things are not protected, by design or because of the camera's protocol.
+Read this before using it on a network you do not control.
+
+* **The camera protocol has no encryption and no authentication of the
+  camera.** Anyone on the same Wi-Fi can pose as a camera. The *allowed
+  cameras* list narrows this down, but a person who knows a camera's IP address
+  and serial number can still imitate it. Use a network you control (a separate
+  Wi-Fi for the camera, router access control).
+* **The web interface uses plain HTTP with Basic authentication.** The
+  password is visible to anyone who can capture traffic. Keep it on
+  `127.0.0.1`, use it on a trusted LAN, or put a TLS reverse proxy (Caddy,
+  nginx) in front of it.
+* **The web password is stored in clear text** in `settings.json` (the Windows
+  window must be able to show it). On Linux the file is readable only by its
+  owner; on Windows it is protected by your user profile only.
+* **A logged-in web user can choose any save folder** the program may write
+  to. On a server run it as an unprivileged user (the `.deb` does) and give it
+  only the photo folder.
+* **Received files are not scanned.** They are saved as the camera describes
+  them (file names are made safe, content is not checked).
+* **Packaging is only lightly hardened.** The systemd unit of the `.deb` uses
+  just `NoNewPrivileges`, `ProtectSystem=full` and `PrivateTmp`; the Docker
+  image runs as root inside the container. Run the service as the `spmag-wpr`
+  user and limit the folders it can write to.
+* **No independent audit.** The code is AI-generated, reviewed by the same AI
+  and tested by the maintainer; `gosec` was not run, and the release workflow
+  uses a third-party GitHub action pinned to a version tag, not to a commit.
+  Review the code before relying on it, and check the `SHA256SUMS.txt` of a
+  release.
+
 ## Status and testing
 
 Everything listed in this README is implemented. What has **not** been tried on
