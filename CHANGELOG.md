@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.4.5
+
+- Security re-check (see SECURITY.md): the web server passed the same 32 attack
+  checks as in 0.4.1; new tests for hostile camera text in folder names.
+- The systemd unit of the .deb package is hardened further (kernel, clock,
+  namespaces, address families, capabilities; the web port must be above 1023).
+  The docker-compose example runs read-only, without capabilities and with
+  `no-new-privileges`.
+- CI: the build workflow's token is read-only.
+
 ## v0.4.4
 
 - Built with Go 1.27.2 (was 1.22, which no longer gets security fixes). Go 1.27.2
