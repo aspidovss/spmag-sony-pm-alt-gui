@@ -413,13 +413,21 @@ cameras talk to PlayMemories Home:
 All code here is newly written. Only protocol facts (operation codes,
 parameters, data layouts) were taken from the sources above.
 
-## Roadmap
+## Status and testing
 
-* **Linux**: ✅ AppImage, service `wpr watch`, systemd, `.deb`, Docker,
-  amd64/arm64 builds, browser interface (also on Windows), USB pairing through
-  `/dev/sg*` (needs a test with a real camera). Not planned for now: a separate tray icon — the browser interface
-  covers the desktop.
-* More tested cameras: add yours with `wpr capture`.
+Everything listed in this README is implemented. What has **not** been tried on
+real hardware yet (it is covered by unit tests and the fake camera only):
+
+* USB pairing on Linux through `/dev/sg*` with a real camera.
+* The ARM builds (`arm64` tar.gz, `.deb` and AppImage) on ARM hardware.
+* Several cameras one after another: records of received files are kept per
+  camera and `{serial}` gives each camera its own folder, but this was not
+  tried with two real cameras. Cameras are served one at a time.
+* Cameras other than the Sony α77 II (ILCA-77M2); see
+  [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md). Add yours with `wpr capture`.
+
+Not planned for now: a separate tray icon on Linux (the browser interface
+covers the desktop).
 
 ## License
 
