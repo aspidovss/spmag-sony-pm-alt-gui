@@ -57,7 +57,7 @@ func init() {
 		"set.folder":           "Dossier :",
 		"set.browse":           "Parcourir…",
 		"set.subfolders":       "Sous-dossiers :",
-		"set.patternHelp":      "{yyyy} {MM} {dd} {camera} ; vide = pas de sous-dossiers",
+		"set.patternHelp":      "{yyyy} {MM} {dd} {camera} {serial} ; vide = pas de sous-dossiers",
 		"set.example":          "Exemple :",
 		"set.noSubfolders":     "(pas de sous-dossiers)",
 		"set.types":            "Types de fichiers à télécharger automatiquement",

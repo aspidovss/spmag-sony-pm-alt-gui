@@ -82,6 +82,7 @@ func (s Status) String() string {
 // Item is one file on the camera.
 type Item struct {
 	Key         string
+	LegacyKey   string // key used before records were per camera (v0.4.1 and older)
 	Handle      uint32
 	Storage     uint32
 	Folder      string
@@ -103,6 +104,7 @@ type Session struct {
 	IP         string
 	CameraName string
 	CameraID   string
+	Serial     string
 	UsedGUID   pairing.GUID
 	GUIDSource string // "own" or "PlayMemories (adapter MAC)"
 
@@ -206,6 +208,7 @@ func connect(ctx context.Context, ip string, manual bool, cfg config.Settings, d
 		ssdp.CleanText(info.Manufacturer), ssdp.CleanText(info.Model), ssdp.CleanText(info.SerialNumber), ssdp.CleanText(info.DeviceVersion)
 	s.Info = info
 	s.CameraID = strings.TrimSpace(info.Model + " " + info.SerialNumber)
+	s.Serial = info.SerialNumber
 	if info.Model != "" {
 		s.CameraName = info.Model
 	}
@@ -280,7 +283,7 @@ func (s *Session) Scan(ctx context.Context, progress func(n int)) error {
 				t = time.Time{}
 			}
 			items = append(items, &Item{
-				Key: store.Key(name, size, capRaw), Handle: h, Storage: storage,
+				Key: store.CameraKey(s.CameraID, name, size, capRaw), LegacyKey: store.Key(name, size, capRaw), Handle: h, Storage: storage,
 				Folder: folder, Name: name, Size: size, CapturedRaw: capRaw,
 				Captured: t, Kind: KindOf(oi.Filename),
 			})
@@ -326,7 +329,18 @@ func (s *Session) Reconcile(idx DestIndex) {
 func reconcileItem(it *Item, cfg *config.Settings, db *store.DB, idx DestIndex, camID string) {
 	it.Note = ""
 	it.LocalPath = ""
-	if rec, ok := db.Get(it.Key); ok {
+	rec, ok := db.Get(it.Key)
+	if !ok && it.LegacyKey != "" && it.LegacyKey != it.Key {
+		// A record written by an older version: take it over if it is this
+		// camera's (or has no camera noted), and keep it under the new key.
+		if old, found := db.Get(it.LegacyKey); found && (old.Camera == "" || old.Camera == camID) {
+			db.Delete(it.LegacyKey)
+			old.Key, old.Camera = it.Key, camID
+			db.Put(old)
+			rec, ok = old, true
+		}
+	}
+	if ok {
 		if st, err := os.Stat(rec.LocalPath); err == nil && uint64(st.Size()) == it.Size {
 			it.Status = StatusReceived
 			it.LocalPath = rec.LocalPath
@@ -549,7 +563,7 @@ func (s *Session) setStatus(it *Item, st Status, note string) {
 }
 
 func (s *Session) downloadOne(ctx context.Context, it *Item, cfg config.Settings, progress func(done, total int64)) (string, int64, error) {
-	dir := filepath.Join(cfg.DestDir, ExpandPattern(cfg.FolderPattern, it.Captured, s.CameraName))
+	dir := filepath.Join(cfg.DestDir, ExpandPattern(cfg.FolderPattern, it.Captured, s.CameraName, s.Serial))
 	// The file name comes from the device on the network and is not trusted.
 	name := SafeFileName(it.Name)
 	if name == "" {
@@ -663,8 +677,8 @@ func uniqueName(p string) string {
 }
 
 // ExpandPattern turns a folder pattern into a relative path.
-// Tokens: {yyyy} {yy} {MM} {dd} {camera}.
-func ExpandPattern(pattern string, t time.Time, camera string) string {
+// Tokens: {yyyy} {yy} {MM} {dd} {camera} (model) {serial} (serial number).
+func ExpandPattern(pattern string, t time.Time, camera, serial string) string {
 	if strings.TrimSpace(pattern) == "" {
 		return ""
 	}
@@ -677,6 +691,7 @@ func ExpandPattern(pattern string, t time.Time, camera string) string {
 		"{MM}", t.Format("01"),
 		"{dd}", t.Format("02"),
 		"{camera}", sanitize(camera),
+		"{serial}", sanitize(serial),
 	)
 	out := r.Replace(pattern)
 	out = strings.ReplaceAll(out, "/", string(filepath.Separator))

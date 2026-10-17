@@ -57,7 +57,7 @@ func init() {
 		"set.folder":           "文件夹：",
 		"set.browse":           "浏览…",
 		"set.subfolders":       "子文件夹：",
-		"set.patternHelp":      "{yyyy} {MM} {dd} {camera}；留空 = 不使用子文件夹",
+		"set.patternHelp":      "{yyyy} {MM} {dd} {camera} {serial}；留空 = 不使用子文件夹",
 		"set.example":          "示例：",
 		"set.noSubfolders":     "（无子文件夹）",
 		"set.types":            "自动下载的文件类型",

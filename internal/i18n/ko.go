@@ -57,7 +57,7 @@ func init() {
 		"set.folder":           "폴더:",
 		"set.browse":           "찾아보기…",
 		"set.subfolders":       "하위 폴더:",
-		"set.patternHelp":      "{yyyy} {MM} {dd} {camera}; 비우면 하위 폴더 없음",
+		"set.patternHelp":      "{yyyy} {MM} {dd} {camera} {serial}; 비우면 하위 폴더 없음",
 		"set.example":          "예:",
 		"set.noSubfolders":     "(하위 폴더 없음)",
 		"set.types":            "자동으로 다운로드할 파일 형식",

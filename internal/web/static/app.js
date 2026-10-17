@@ -218,7 +218,7 @@
     try {
       const s = await api("/api/settings");
       const dl = $("patterns"); dl.replaceChildren();
-      for (const p of ["{yyyy}/{yyyy}-{MM}-{dd}", "{yyyy}-{MM}-{dd}", "{yyyy}/{MM}", "{camera}/{yyyy}-{MM}-{dd}"]) {
+      for (const p of ["{yyyy}/{yyyy}-{MM}-{dd}", "{yyyy}-{MM}-{dd}", "{yyyy}/{MM}", "{camera}/{yyyy}-{MM}-{dd}", "{camera}-{serial}/{yyyy}-{MM}-{dd}"]) {
         const o = document.createElement("option"); o.value = p; dl.appendChild(o);
       }
       fillForm(s); settingsLoaded = true;

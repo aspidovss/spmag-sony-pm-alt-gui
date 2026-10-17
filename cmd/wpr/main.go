@@ -414,7 +414,7 @@ func cmdWatch(ctx context.Context, args []string) error {
 	}
 	fs := flag.NewFlagSet("watch", flag.ExitOnError)
 	dest := fs.String("dest", cfg.DestDir, "folder for received files")
-	pattern := fs.String("pattern", cfg.FolderPattern, "subfolder pattern: {yyyy} {yy} {MM} {dd} {camera}; empty = none")
+	pattern := fs.String("pattern", cfg.FolderPattern, "subfolder pattern: {yyyy} {yy} {MM} {dd} {camera} {serial}; empty = none")
 	types := fs.String("types", typesString(cfg), "file types to download: jpeg,raw,video,other")
 	guid := fs.String("guid", cfg.GUID, "PTP/IP ID of this computer (use the same ID as your paired Windows PC)")
 	name := fs.String("name", cfg.HostName, "name shown on the camera (default: host name)")

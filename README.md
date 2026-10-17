@@ -373,7 +373,7 @@ $env:SPMAG_CONFIG_DIR = "$env:TEMP\spmag-demo"
 | Log | `%APPDATA%\SPMAG Wifi Photo Receiver\log.txt` |
 | Autostart | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\SPMAG Wifi Photo Receiver` |
 
-Subfolder pattern tokens: `{yyyy}` `{yy}` `{MM}` `{dd}` `{camera}`. An empty pattern means no subfolders.
+Subfolder pattern tokens: `{yyyy}` `{yy}` `{MM}` `{dd}` `{camera}` (model) `{serial}` (serial number; use it to separate cameras of the same model). An empty pattern means no subfolders.
 
 ## Troubleshooting
 
