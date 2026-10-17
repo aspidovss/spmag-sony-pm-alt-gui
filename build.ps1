@@ -1,5 +1,5 @@
 # Builds the Windows executables into dist\ (run from the repository root).
-# Requires Go 1.22+:  winget install GoLang.Go
+# Requires Go 1.27.2+:  winget install GoLang.Go
 $ErrorActionPreference = "Stop"
 # -mod=mod lets Go fill in missing go.sum entries on the first build.
 if (-not $env:GOFLAGS) { $env:GOFLAGS = "-mod=mod" }

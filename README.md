@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.png" width="128" height="128" alt="SPMAG Wifi Photo Receiver logo"></p>
+
 # SPMAG Wifi Photo Receiver
 
 [![Go](https://img.shields.io/github/go-mod/go-version/aspidovss/spmag-sony-pm-alt-gui?logo=go&logoColor=white&color=00ADD8)](https://go.dev/)
@@ -314,7 +316,7 @@ Dockerfile, docker-compose.yml   container for wpr watch
 
 ## Building
 
-Requirements: [Go](https://go.dev/dl/) 1.22 or newer (`winget install GoLang.Go`).
+Requirements: [Go](https://go.dev/dl/) 1.27.2 or newer (`winget install GoLang.Go`).
 Nothing else is required. The build installs the `rsrc` resource tool automatically.
 
 **Windows (PowerShell), from the repository root:**
