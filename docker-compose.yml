@@ -8,6 +8,10 @@ services:
     container_name: spmag-wpr
     network_mode: host          # required for SSDP camera discovery
     restart: unless-stopped
+    read_only: true             # nothing is written outside /photos and /config
+    cap_drop: [ALL]             # no privileged ports: use a web port above 1023
+    security_opt:
+      - no-new-privileges:true
     environment:
       SPMAG_WEB: ":8080"        # browser interface; remove both lines for headless mode
       SPMAG_WEB_PASSWORD: ${SPMAG_WEB_PASSWORD:?set SPMAG_WEB_PASSWORD in .env}

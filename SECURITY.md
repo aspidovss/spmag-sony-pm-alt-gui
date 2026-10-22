@@ -64,6 +64,33 @@ every changing request (cross-site requests), constant-time credential
 comparison, validation of the save folder, subfolder pattern and IP address,
 no directory listing or path traversal for the embedded page.
 
+## Re-check of version 0.4.4
+
+Done after the per-camera records, the `{serial}` folder token and the move to
+Go 1.27.2 (no vulnerabilities reported by `govulncheck` v1.9.0 in CI):
+
+* The web server was attacked again with the same 32 checks as in 0.4.1
+  (authentication, cross-site requests, path tricks, oversized headers, bodies
+  and URLs, slow connections, a 140-connection flood, password guessing,
+  connect-by-IP and allowed-cameras rules). All passed.
+* The camera's serial number and model go into folder names (`{serial}`,
+  `{camera}`). Tests with hostile values (`..`, `..\..\x`, absolute paths,
+  NUL) show that the folder never leaves the save folder.
+* Records of received files are now per camera. A record that belongs to
+  another camera is never taken over, so one camera cannot make another
+  camera's files look "received" (tested).
+* Hardening of the packaging: the systemd unit now also forbids kernel,
+  clock and cgroup changes, namespaces, real-time scheduling, other address
+  families than IP/netlink/unix and writable executable memory, and drops all
+  capabilities (so the web port must be above 1023); the docker-compose
+  example runs with a read-only root file system, no capabilities and
+  `no-new-privileges`. The CI token of the build workflow is read-only.
+  These settings were checked for syntax only (`systemd-analyze verify`,
+  `docker compose config`), not on a real server.
+* Not done: `gosec` could not be run; the release workflow uses a
+  third-party action (`softprops/action-gh-release`) pinned to a version tag,
+  not to a commit; the Docker image runs as root inside the container.
+
 ## Known limits (not fixed, by design or by protocol)
 
 * The web interface uses **plain HTTP with Basic authentication**: the password
