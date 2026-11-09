@@ -13,7 +13,7 @@
 
 **Repository:** <https://github.com/aspidovss/spmag-sony-pm-alt-gui> · © 2026 AspidovSS · MIT License
 
-A small open-source Windows program that receives photos from Sony cameras over
+A small open-source Windows \ Linux \ Docker program that receives photos from Sony cameras over
 Wi-Fi (the camera's **Send to Computer** function). It replaces the Wi-Fi import
 part of PlayMemories Home and nothing else: no catalogue, no editor, no
 online services.
